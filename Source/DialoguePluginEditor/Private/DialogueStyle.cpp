@@ -67,15 +67,20 @@ void FDialogueStyle::Initialize()
 	StyleSet->Set("DialogueEditor.Graph.DialogueEntryDefault", new BOX_PLUGIN_BRUSH("Icons/DialogueNode_EntryDefault", FMargin(16.f / 64.f, 25.f / 64.f, 16.f / 64.f, 16.f / 64.f)));
 
 
-	//StyleSet->Set("DialogueEditor.Refresh", new IMAGE_BRUSH("Icons/icon_MatEd_Refresh_40x", Icon40x40));	
+	StyleSet->Set("DialogueEditor.Graph.DialogueNode.DebugBorder", new BOX_PLUGIN_BRUSH("Icons/DialogueNode_DebugBorder", FMargin(16.f / 64.f, 16.f / 64.f, 16.f / 64.f, 16.f / 64.f)));
 
-	
+		
 	StyleSet->Set("DialogueEditorCommands.AddSnippet", new IMAGE_PLUGIN_BRUSH("Icons/Icon_Apply_Snippet", Icon40x40));
 	StyleSet->Set("DialogueEditorCommands.AddSnippet.Small", new IMAGE_PLUGIN_BRUSH("Icons/Icon_Apply_Snippet", Icon20x20));
 
 	StyleSet->Set("DialogueEditorCommands.RefreshSnippets", new IMAGE_PLUGIN_BRUSH("Icons/Icon_refresh_Snippets", Icon40x40));
 	StyleSet->Set("DialogueEditorCommands.RefreshSnippets.Small", new IMAGE_PLUGIN_BRUSH("Icons/Icon_refresh_Snippets", Icon20x20));
-	
+
+	StyleSet->Set("DialogueDebuggerCommands.StepBack", new IMAGE_PLUGIN_BRUSH("Icons/Icon_StepBackward", Icon40x40));
+	StyleSet->Set("DialogueDebuggerCommands.StepForward", new IMAGE_PLUGIN_BRUSH("Icons/Icon_StepForward", Icon40x40));
+	StyleSet->Set("DialogueDebuggerCommands.StepToBegin", new IMAGE_PLUGIN_BRUSH("Icons/Inco_ToBegin", Icon40x40));
+	StyleSet->Set("DialogueDebuggerCommands.StepToEnd", new IMAGE_PLUGIN_BRUSH("Icons/Icon_ToEnd", Icon40x40));
+
 	//////////////////////////////////////////////////////////////////////////
 
 	FSlateStyleRegistry::RegisterSlateStyle(*StyleSet.Get());

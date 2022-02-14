@@ -84,7 +84,7 @@ void UEdGraph_Dialogue::OnCreated()
 
 void UEdGraph_Dialogue::OnLoaded()
 {
-
+	
 }
 
 void UEdGraph_Dialogue::Initialize()
@@ -107,8 +107,18 @@ void UEdGraph_Dialogue::OnAssetChanged()
 	}
 }
 
+void UEdGraph_Dialogue::ScheduleRebuild()
+{
+	if (GEditor && !bRebuildScheduled)
+	{
+		GEditor->GetTimerManager()->SetTimerForNextTick(this, &UEdGraph_Dialogue::RebuildDialogueGraph);
+		bRebuildScheduled = true;
+	}	
+}
+
 void UEdGraph_Dialogue::RebuildDialogueGraph()
 {
+	bRebuildScheduled = false;
 	UDialogue* Dialogue = GetDialogue();
 
 	TArray<UEdGraphNode_DialogueNode*> DialogueNodes;
@@ -132,6 +142,7 @@ void UEdGraph_Dialogue::RebuildDialogueGraph()
 	TMap<int32, FDialogueNode> NodeMap;
 	TMap<FName, int32> EntryMap;
 
+	TSet<FDialogueParticipant> Participants;
 
 	// Dialogue nodes first pass: Generate Ids and fill map
 	for (int32 Index = 0; Index < DialogueNodes.Num(); Index++)
@@ -149,6 +160,9 @@ void UEdGraph_Dialogue::RebuildDialogueGraph()
 	for (int32 Index = 0; Index < DialogueNodes.Num(); Index++)
 	{
 		UEdGraphNode_DialogueNode* DialogueNode = DialogueNodes[Index];
+
+		// Invalid links are not allowed
+		ensure(DialogueNode->GetOutputPin()->LinkedTo.Remove(nullptr) == 0);
 
 		// Sort execution order
 		DialogueNode->GetOutputPin()->LinkedTo.Sort(FDialoguePinLess(DialogueNode));
@@ -219,27 +233,30 @@ void UEdGraph_Dialogue::RebuildDialogueGraph()
 
 	FDialogueEditorStruct Editor(Dialogue, false);
 	Editor.SetNodes(NodeMap, EntryMap);
+	Dialogue->PostRebuild();
 }
 
 
-void UEdGraph_Dialogue::RebuildGraphAroundNode(UEdGraphNode_DialogueBase* Node)
+void UEdGraph_Dialogue::UpdateChildrenOrder(UEdGraphNode_DialogueBase* MovedNode)
 {
-	if (!Node)
+	if (!MovedNode)
 	{
 		return;
 	}
 
+	//TODO: Ensure is never called during copying
+
 	bool bUpdateExecutionOrder = false;
-	for (UEdGraphPin* NodePin : Node->Pins)
+	for (UEdGraphPin* NodePin : MovedNode->Pins)
 	{
 		// Sort children on parents
-		if (NodePin->Direction == EGPD_Input && NodePin->LinkedTo.Num() > 0) 
+		if (NodePin->Direction == EGPD_Input && NodePin->LinkedTo.Num() > 0)
 		{
 			for (UEdGraphPin* ParentPin : NodePin->LinkedTo)
 			{
 				if (ParentPin->Direction == EGPD_Output)
 				{
-					TArray<UEdGraphPin*> PrevOrder(ParentPin->LinkedTo);
+					TArray<UEdGraphPin*> PrevOrder(ParentPin->LinkedTo);					
 					ParentPin->LinkedTo.Sort(FDialoguePinLess(ParentPin->GetOwningNode()));
 
 					bUpdateExecutionOrder = bUpdateExecutionOrder || (PrevOrder != ParentPin->LinkedTo);
@@ -247,7 +264,7 @@ void UEdGraph_Dialogue::RebuildGraphAroundNode(UEdGraphNode_DialogueBase* Node)
 			}
 		}
 		// Sort children on self
-		else if (NodePin->Direction == EGPD_Output) 
+		else if (NodePin->Direction == EGPD_Output)
 		{
 			TArray<UEdGraphPin*> PrevOrder(NodePin->LinkedTo);
 			NodePin->LinkedTo.Sort(FDialoguePinLess(NodePin->GetOwningNode()));
@@ -258,7 +275,7 @@ void UEdGraph_Dialogue::RebuildGraphAroundNode(UEdGraphNode_DialogueBase* Node)
 
 	if (bUpdateExecutionOrder)
 	{
-		RebuildDialogueGraph(); 
+		ScheduleRebuild();
 		Modify();
 	}
 }

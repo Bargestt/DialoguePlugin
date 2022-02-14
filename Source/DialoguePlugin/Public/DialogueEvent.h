@@ -9,19 +9,42 @@
 /**
  * 
  */
-UCLASS(Abstract, Blueprintable, editinlinenew)
+UCLASS(Abstract, Blueprintable, BlueprintType, editinlinenew, meta = (ShowWorldContextPin))
 class DIALOGUEPLUGIN_API UDialogueEvent : public UObject
 {
 	GENERATED_BODY()
 public:
 
-	bool CanExecute(UObject* WorldContext, UDialogue* Dialogue, int32 NodeId)
+	virtual bool CanExecute(UObject* WorldContext, UDialogue* Dialogue, int32 NodeId)
+	{
+		if (GetClass()->HasAnyClassFlags(CLASS_CompiledFromBlueprint) || !GetClass()->HasAnyClassFlags(CLASS_Native))
+		{
+			return BP_CanExecute(WorldContext, Dialogue, NodeId);
+		}
+		return true;
+	}
+
+	virtual void ExecuteEvent(UObject* WorldContext, UDialogue* Dialogue, int32 NodeId)
+	{
+		if (GetClass()->HasAnyClassFlags(CLASS_CompiledFromBlueprint) || !GetClass()->HasAnyClassFlags(CLASS_Native))
+		{
+			BP_ExecuteEvent(WorldContext, Dialogue, NodeId);
+		}
+	}
+
+protected:
+	UFUNCTION(BlueprintNativeEvent, Category = Dialogue, meta = (DisplayName = "CanExecute"))
+	bool BP_CanExecute(UObject* WorldContext, UDialogue* Dialogue, int32 NodeId);
+	bool BP_CanExecute_Implementation(UObject* WorldContext, UDialogue* Dialogue, int32 NodeId)
 	{
 		return true;
 	}
 
-	void ExecuteEvent(UObject* WorldContext, UDialogue* Dialogue, int32 NodeId)
+	UFUNCTION(BlueprintNativeEvent, Category = Dialogue, meta = (DisplayName = "ExecuteEvent"))
+	void BP_ExecuteEvent(UObject* WorldContext, UDialogue* Dialogue, int32 NodeId);
+	void BP_ExecuteEvent_Implementation(UObject* WorldContext, UDialogue* Dialogue, int32 NodeId)
 	{
 
 	}
+
 };

@@ -16,6 +16,9 @@ public:
 
 	UEdGraphNode_DialogueNode();
 
+	virtual int32 GetNodeId() const override { return Node.NodeID; }
+
+	virtual void PostPasteNode() override;
 	virtual int32 GetExecutionIndex(UEdGraphNode_DialogueBase* Node) const override;
 	virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;
 	virtual FText GetTooltipText() const override;

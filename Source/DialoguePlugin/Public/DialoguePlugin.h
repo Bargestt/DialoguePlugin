@@ -9,6 +9,7 @@
 DECLARE_LOG_CATEGORY_EXTERN(LogDialogue, Log, All);
 
 
+
 class FDialoguePlugin : public IModuleInterface
 {
 };

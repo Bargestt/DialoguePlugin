@@ -16,6 +16,15 @@
 
 void FDialogueParticipantCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> PropertyHandle, FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& CustomizationUtils)
 {	
+	TSharedPtr<IPropertyHandle> NameHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FDialogueParticipant, Name));
+	TSharedPtr<IPropertyHandle> ObjectHandle =  PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FDialogueParticipant, Object));
+
+	bool bLockNameSelection = PropertyHandle->GetBoolMetaData("LockNameSelection") || !PropertyHandle->IsEditable();
+
+	TSharedRef<SWidget> ComboBox = PropertyCustomizationHelpers::MakePropertyComboBox(NameHandle,
+			FOnGetPropertyComboBoxStrings::CreateSP(this, &FDialogueParticipantCustomization::GenerateStrings));	
+	ComboBox->SetEnabled(!bLockNameSelection);
+
 	HeaderRow
 	.NameContent()
 	[
@@ -31,19 +40,24 @@ void FDialogueParticipantCustomization::CustomizeHeader(TSharedRef<IPropertyHand
 			SNew(SBox)
 			.MinDesiredWidth(100.0f)
 			[				
-				PropertyCustomizationHelpers::MakePropertyComboBox(
-					PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FDialogueParticipant, Name)),
-					FOnGetPropertyComboBoxStrings::CreateSP(this, &FDialogueParticipantCustomization::GenerateStrings))
+				ComboBox
 			]
-
+		]
+		+ SHorizontalBox::Slot().AutoWidth()
+		[
+			bLockNameSelection ? SNullWidget::NullWidget : NameHandle->CreateDefaultPropertyButtonWidgets()
 		]
 		+ SHorizontalBox::Slot().FillWidth(1.0f).HAlign(HAlign_Fill)
 		[
 			SNew(SBox)
 			.MinDesiredWidth(250.0f)
 			[
-				PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FDialogueParticipant, Object))->CreatePropertyValueWidget(true)
+				ObjectHandle->CreatePropertyValueWidget(true)
 			]
+		]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0.0f, 0.0f, 3.0f, 0.0f))
+		[
+			ObjectHandle->CreateDefaultPropertyButtonWidgets()
 		]
 	];
 }

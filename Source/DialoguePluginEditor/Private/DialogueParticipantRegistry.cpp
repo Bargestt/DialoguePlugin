@@ -59,7 +59,9 @@ void FDialogueParticipantRegistry::OnBlueprintPreCompile(UBlueprint* Blueprint)
 {
 	if (Blueprint && 
 		RegisteredBlueprints.Contains(Blueprint->GetFName()) ||
-		(Blueprint->GeneratedClass && Blueprint->GeneratedClass->ImplementsInterface(UDialogueParticipantInterface::StaticClass()))
+		(Blueprint->GeneratedClass && Blueprint->GeneratedClass->ImplementsInterface(UDialogueParticipantInterface::StaticClass())) ||
+		Blueprint->ImplementedInterfaces.ContainsByPredicate(
+			[](const FBPInterfaceDescription& Interface) { return Interface.Interface == UDialogueParticipantInterface::StaticClass(); })
 		)
 	{
 		bRelevantBlueprintChanging = true;

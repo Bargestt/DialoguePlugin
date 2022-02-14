@@ -12,16 +12,41 @@ FConnectionDrawingPolicy_Dialogue::FConnectionDrawingPolicy_Dialogue(int32 InBac
 
 void FConnectionDrawingPolicy_Dialogue::DetermineWiringStyle(UEdGraphPin* OutputPin, UEdGraphPin* InputPin, /*inout*/ FConnectionParams& Params)
 {	
+	const UDialogueEditorSettings* DialogueSettings = UDialogueEditorSettings::Get();
+
 	Params.AssociatedPin1 = OutputPin;
 	Params.AssociatedPin2 = InputPin;
-	Params.WireThickness = UDialogueEditorSettings::Get()->WireThickness;
-	Params.WireColor = UDialogueEditorSettings::Get()->WireColor;
+	Params.WireThickness = DialogueSettings->WireThickness;
+	Params.WireColor = DialogueSettings->WireColor;
 
 	const bool bDeemphasizeUnhoveredPins = HoveredPins.Num() > 0;
 	if (bDeemphasizeUnhoveredPins)
 	{		
 		ApplyHoverDeemphasis(OutputPin, InputPin, /*inout*/ Params.WireThickness, /*inout*/ Params.WireColor);
 	}
+
+	UEdGraphNode_DialogueBase* FromNode = OutputPin ? Cast<UEdGraphNode_DialogueBase>(OutputPin->GetOwningNode()) : NULL;
+	UEdGraphNode_DialogueBase* ToNode = InputPin ? Cast<UEdGraphNode_DialogueBase>(InputPin->GetOwningNode()) : NULL;
+
+	if (ToNode && FromNode)
+	{
+		if (FromNode->bDebuggerMark_Active)
+		{
+			if (ToNode->bDebuggerMark_EntryDenied)
+			{
+				Params.WireThickness *= 2.0f;
+				Params.WireColor = DialogueSettings->DebuggerState_EntryDenied;
+				Params.bUserFlag1 = true;
+			}
+			else if (ToNode->bDebuggerMark_EntryAllowed)
+			{
+				Params.WireThickness *= 2.0f;
+				Params.WireColor = DialogueSettings->DebuggerState_EntryAllowed;
+				Params.bUserFlag1 = true;
+			}
+		}
+	}
+
 
 	bool bSelected = false;
 	if (!bSelected && OutputPin)
@@ -44,8 +69,8 @@ void FConnectionDrawingPolicy_Dialogue::DetermineWiringStyle(UEdGraphPin* Output
 	Params.bUserFlag2 = bSelected;
 	if (bSelected)
 	{		
-		Params.WireThickness *= UDialogueEditorSettings::Get()->WireThicknessScale_Selected;
-		Params.WireColor *= UDialogueEditorSettings::Get()->WireColor_Selected;
+		Params.WireThickness *= DialogueSettings->WireThicknessScale_Selected;
+		Params.WireColor *= DialogueSettings->WireColor_Selected;
 	}
 }
 
@@ -101,15 +126,17 @@ void FConnectionDrawingPolicy_Dialogue::DrawSplineWithArrow(const FVector2D& Sta
 		FConnectionParams Params2 = Params;
 		Params2.WireThickness *= UDialogueEditorSettings::Get()->ReturnWireThicknessScale;
 
-		if (Params2.bUserFlag2)
+		if (!Params.bUserFlag1)
 		{
-			Params2.WireColor = UDialogueEditorSettings::Get()->ReturnWireColor_Selected;
-		}
-		else
-		{
-			Params2.WireColor = UDialogueEditorSettings::Get()->ReturnWireColor;
-		}
-		
+			if (Params2.bUserFlag2)
+			{
+				Params2.WireColor = UDialogueEditorSettings::Get()->ReturnWireColor_Selected;
+			}
+			else
+			{
+				Params2.WireColor = UDialogueEditorSettings::Get()->ReturnWireColor;
+			}
+		}		
 
 		FConnectionDrawingPolicy::DrawSplineWithArrow(StartAnchorPoint, EndAnchorPoint, Params2);
 		return;
@@ -157,20 +184,17 @@ void FConnectionDrawingPolicy_Dialogue::DrawPreviewConnector(const FGeometry& Pi
 	FVector2D EndAnchorPoint = EndPoint;
 
 	const bool bGoingDown = StartPoint.Y < EndPoint.Y;
-	if (Pin->Direction == EGPD_Output)
-	{
-		if (bGoingDown)
-		{			
+	if (bGoingDown)
+	{		
+		if (Pin->Direction == EGPD_Output)
+		{
 			const FVector2D StartCenter = FGeometryHelper::CenterOf(PinGeometry);
 			const FVector2D SeedPoint = (StartCenter + EndPoint) * 0.5f;
 
 			StartAnchorPoint = FGeometryHelper::FindClosestPointOnGeom(PinGeometry, SeedPoint);
-		}	
-	}
-	else if (Pin->Direction == EGPD_Input)
-	{
-		if (bGoingDown)
-		{			
+		}
+		else if (Pin->Direction == EGPD_Input)
+		{
 			const FVector2D EndCenter = FGeometryHelper::CenterOf(PinGeometry);
 			const FVector2D SeedPoint = (EndCenter + StartPoint) * 0.5f;
 

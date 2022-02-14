@@ -8,6 +8,8 @@
 
 #include "Dialogue.h"
 
+class UEdGraph_Dialogue;
+
 
 class FAssetEditor_Dialogue : public FAssetEditorToolkit, public FEditorUndoClient
 {
@@ -39,7 +41,7 @@ public:
 public:
 	void InitDialogueEditor(const EToolkitMode::Type Mode, const TSharedPtr< IToolkitHost >& InitToolkitHost, UDialogue* InitDialogue);
 	UDialogue* GetAssetBeingEdited() const { return AssetBeingEdited; }
-		
+	UEdGraph_Dialogue* GetGraph() const;
 
 protected:
 	TSharedRef<SDockTab> SpawnTab_Viewport(const FSpawnTabArgs& Args);
@@ -50,7 +52,9 @@ private:
 	void CreateGraphCommandList();
 
 	void BindCommands();
+	void BindDebuggerCommands();
 
+	void ExtendToolbar();
 
 	void OnSelectedNodesChanged(const TSet<class UObject*>& NewSelection);
 	void OnNodeDoubleClicked(UEdGraphNode* Node);
@@ -59,9 +63,18 @@ private:
 
 	void RestoreDialogueGraph();
 	void RebuildDialogueGraph();
+	
 	TSharedPtr<SGraphEditor> GetGraphEditor() const;
 	FGraphPanelSelectionSet GetSelectedNodes() const;
 
+	bool IsDebuggerReady() const;
+	FText GetDebuggerDesc() const;
+	TSharedRef<class SWidget> OnGetDebuggerActorsMenu();
+	void OnDebuggerActorSelected(TWeakObjectPtr<class UDialogueExecutorBase> InstanceToDebug);
+
+	FText GetDebuggerVerbosityDesc() const;
+	TSharedRef<class SWidget> OnGetDebuggerVerbosityMenu();
+	void OnDebuggerVerbositySelected(FName Verbosity);
 
 	// Commands
 	void SelectAllNodes();
@@ -93,6 +106,8 @@ private:
 
 	TSharedPtr<SGraphEditor> ViewportWidget;
 	TSharedPtr<class IDetailsView> DetailsWidget;
+
+	TSharedPtr<class FDialogueDebugger> Debugger;
 
 	TSharedPtr<FUICommandList> GraphEditorCommands;
 

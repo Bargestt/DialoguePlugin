@@ -14,7 +14,15 @@ class UEdGraphNode_DialogueBase : public UEdGraphNode
 	GENERATED_BODY()
 
 protected:
-	
+
+
+public:
+	uint32 bDebuggerMark_DebugEnabled : 1;
+
+	uint32 bDebuggerMark_Active : 1;
+	uint32 bDebuggerMark_Finished : 1;
+	uint32 bDebuggerMark_EntryDenied : 1;
+	uint32 bDebuggerMark_EntryAllowed : 1;
 
 public:
 	UEdGraphNode_DialogueBase();
@@ -27,11 +35,14 @@ public:
 
 	UEdGraph_Dialogue* GetDialogueEdGraph() const;
 
+	virtual int32 GetNodeId() const { return INDEX_NONE; }
+
 //~ Begin UEdGraphNode Interface
 	virtual TSharedPtr<SGraphNode> CreateVisualWidget() override;
 	virtual void AllocateDefaultPins() override;
 	virtual FText GetTooltipText() const override;
 	virtual void PrepareForCopying() override;
+	virtual void PostPasteNode() override;
 	virtual void AutowireNewNode(UEdGraphPin* FromPin) override;
 	virtual void NodeConnectionListChanged() override;
 
@@ -53,5 +64,8 @@ public:
 	virtual UEdGraphPin* GetOutputPin() const;
 	
 	virtual int32 GetExecutionIndex(UEdGraphNode_DialogueBase* Node) const;
+
+
+
 
 };

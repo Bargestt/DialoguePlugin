@@ -13,6 +13,8 @@ class DIALOGUEPLUGINEDITOR_API UEdGraph_Dialogue : public UEdGraph
 {
 	GENERATED_BODY()
 
+private:
+	bool bRebuildScheduled;
 
 public:
 	UEdGraph_Dialogue();
@@ -29,8 +31,10 @@ public:
 
 	void OnAssetChanged();
 
+	void ScheduleRebuild();
+
 	void RebuildDialogueGraph();
-	void RebuildGraphAroundNode(UEdGraphNode_DialogueBase* Node);
+	void UpdateChildrenOrder(UEdGraphNode_DialogueBase* MovedNode);
 	void SpawnMissingNodes();
 
 	void FixEntryName(UEdGraphNode_DialogueEntry* EntryNode);

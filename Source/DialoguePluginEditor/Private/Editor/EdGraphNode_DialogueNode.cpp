@@ -14,6 +14,17 @@ UEdGraphNode_DialogueNode::UEdGraphNode_DialogueNode()
 
 }
 
+void UEdGraphNode_DialogueNode::PostPasteNode()
+{
+	Super::PostPasteNode();
+
+	//Manually duplicate because context has different outer
+	if (Node.Context)
+	{
+		Node.Context = DuplicateObject(Node.Context, Node.Context->GetOuter());
+	}
+}
+
 int32 UEdGraphNode_DialogueNode::GetExecutionIndex(UEdGraphNode_DialogueBase* InNode) const
 {
 	UEdGraphNode_DialogueNode* DialogueNode = Cast<UEdGraphNode_DialogueNode>(InNode);
@@ -110,7 +121,7 @@ FLinearColor UEdGraphNode_DialogueNode::GetNodeBorderTintColor() const
 	const UDialogueEditorSettings* Settings = UDialogueEditorSettings::Get();
 
 	EColorSource Source = Settings->NodeBorderColorSource;
-	FLinearColor Color = (Node.NodeType.IsNone() || !Settings->CustomTypeNodeColor.Contains(Node.NodeType)) ? Settings->NodeColor : Settings->CustomTypeNodeColor[Node.NodeType];
+	FLinearColor Color = (Node.NodeType.IsNone() || !Settings->CustomTypeNodeBorderColor.Contains(Node.NodeType)) ? Settings->NodeColor : Settings->CustomTypeNodeBorderColor[Node.NodeType];
 
 	if ((Source == EColorSource::Both || Source == EColorSource::Context)
 		&& Node.Context && Node.Context->GetOverrideNodeColor(Color))

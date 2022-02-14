@@ -30,15 +30,12 @@ UDialogue* UDialogueCondition::GetDialogue() const
 bool UDialogueCondition_AND::IsConditionMet(UObject* WorldContext) const
 {
 	bool bResult = true;
-	for (UDialogueCondition* Condition : Conditions)
+
+	for (int32 Index = 0; Index < Conditions.Num() && bResult; Index++)
 	{
-		if (Condition)
+		if (Conditions[Index])
 		{
-			bResult = bResult && Condition->CheckCondition(WorldContext);
-			if (!bResult)
-			{
-				break;
-			}
+			bResult = bResult && Conditions[Index]->CheckCondition(WorldContext);
 		}
 	}
 
@@ -47,18 +44,21 @@ bool UDialogueCondition_AND::IsConditionMet(UObject* WorldContext) const
 
 bool UDialogueCondition_OR::IsConditionMet(UObject* WorldContext) const
 {
-	bool bResult = true;
-	for (UDialogueCondition* Condition : Conditions)
+	bool bResult = false;
+
+	for (int32 Index = 0; Index < Conditions.Num() && !bResult; Index++)
 	{
-		if (Condition)
+		if (Conditions[Index])
 		{
-			bResult = bResult || Condition->CheckCondition(WorldContext);
-			if (bResult)
-			{
-				break;
-			}
-		}
+			bResult = bResult || Conditions[Index]->CheckCondition(WorldContext);
+		}		
 	}
 
 	return bResult;
+}
+
+bool UDialogueCondition_Equality::IsConditionMet(UObject* WorldContext) const
+{
+	bool bResult = (A && A->CheckCondition(WorldContext)) == (B && B->CheckCondition(WorldContext));	
+	return bCheckEqual ? bResult : !bResult;
 }

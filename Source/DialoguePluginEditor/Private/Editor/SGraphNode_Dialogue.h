@@ -28,6 +28,9 @@ public:
 
 	const FSlateBrush* GetNodeBodyBrush() const override;
 
+	FSlateColor GetDebugBorderColor() const;
+	FMargin GetDebugBorderPadding() const;
+
 	EVisibility GetContentVisibility() const;
 	EVisibility GetContextVisibility() const;
 
@@ -38,7 +41,7 @@ public:
 	EVisibility GetIconVisibility() const;
 	EVisibility GetConditionVisibility() const;
 	EVisibility GetEventVisibility() const;
-	EVisibility GetSoundVisibility() const;
+	EVisibility GetSoundVisibility() const;	
 
 
 	FSlateColor GetBodyColor() const { return CachedBodyColor; }
@@ -47,6 +50,8 @@ public:
 	FText GetContextText() const { return CachedContextText; }
 	const FSlateBrush* GetNodeIcon() const { return &CachedIconBrush; }
 
+
+	
 protected:
 	int32 CacheRefreshID;
 

@@ -23,6 +23,8 @@
 #include "EdGraphNode_DialogueBase.h"
 #include "EdGraphNode_DialogueNode.h"
 #include "DialogueEditorSettings.h"
+#include "DialogueDebugger.h"
+#include "DialogueExecutor.h"
 
 #define LOCTEXT_NAMESPACE "AssetEditor_Dialogue"
 
@@ -63,8 +65,7 @@ public:
 
 		RefreshItems();
 
-		FToolBarBuilder ToolbarBuilder(
-			OwningEditor->GetToolkitCommands(), FMultiBoxCustomization::None, nullptr, Orient_Horizontal, true);
+		FToolBarBuilder ToolbarBuilder(OwningEditor->GetToolkitCommands(), FMultiBoxCustomization::None, nullptr, true);
 
 		// Use a custom style		
 		ToolbarBuilder.SetIsFocusable(false);		
@@ -202,6 +203,8 @@ FAssetEditor_Dialogue::~FAssetEditor_Dialogue()
 	{
 		GEditor->UnregisterForUndo(this);
 	}
+
+	Debugger.Reset();
 }
 
 TSharedRef<SDockTab> FAssetEditor_Dialogue::SpawnTab_Viewport(const FSpawnTabArgs& Args)
@@ -327,6 +330,11 @@ void FAssetEditor_Dialogue::InitDialogueEditor(const EToolkitMode::Type Mode, co
 	}
 
 	RestoreDialogueGraph();
+
+	Debugger = MakeShareable(new FDialogueDebugger);
+	Debugger->Setup(AssetBeingEdited, SharedThis(this));
+	BindDebuggerCommands();
+
 	BindCommands();
 
 	// Default layout	
@@ -377,9 +385,17 @@ void FAssetEditor_Dialogue::InitDialogueEditor(const EToolkitMode::Type Mode, co
 
 	// Initialize the asset editor
 	InitAssetEditor(Mode, InitToolkitHost, DialogueEditorAppName, StandaloneDefaultLayout, /*bCreateDefaultStandaloneMenu=*/ true, /*bCreateDefaultToolbar=*/ true, InitDialogue);
+	ExtendToolbar();
 	RegenerateMenusAndToolbars();
 }
 
+UEdGraph_Dialogue* FAssetEditor_Dialogue::GetGraph() const
+{
+	UEdGraph_Dialogue* EdGraph = Cast<UEdGraph_Dialogue>(AssetBeingEdited->EdGraph);
+	check(EdGraph != nullptr);
+
+	return EdGraph;
+}
 
 //////////////////////////////////////////////////////////////////////////
 //	FAssetEditorToolkit interface
@@ -437,33 +453,40 @@ void FAssetEditor_Dialogue::CreateGraphCommandList()
 	GraphEditorCommands = MakeShareable(new FUICommandList);	
 
 	FGenericCommands::Register();	
+	const FGenericCommands& Commands = FGenericCommands::Get();
 
-	GraphEditorCommands->MapAction(FGenericCommands::Get().SelectAll,
+	GraphEditorCommands->MapAction(
+		Commands.SelectAll,
 		FExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::SelectAllNodes),
 		FCanExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::CanSelectAllNodes)
 	);
 
-	GraphEditorCommands->MapAction(FGenericCommands::Get().Delete,
+	GraphEditorCommands->MapAction(
+		Commands.Delete,
 		FExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::DeleteSelectedNodes),
 		FCanExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::CanDeleteNodes)
 	);
 
-	GraphEditorCommands->MapAction(FGenericCommands::Get().Copy,
+	GraphEditorCommands->MapAction(
+		Commands.Copy,
 		FExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::CopySelectedNodes),
 		FCanExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::CanCopyNodes)
 	);
 
-	GraphEditorCommands->MapAction(FGenericCommands::Get().Cut,
+	GraphEditorCommands->MapAction(
+		Commands.Cut,
 		FExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::CutSelectedNodes),
 		FCanExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::CanCutNodes)
 	);
 
-	GraphEditorCommands->MapAction(FGenericCommands::Get().Paste,
+	GraphEditorCommands->MapAction(
+		Commands.Paste,
 		FExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::PasteNodes),
 		FCanExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::CanPasteNodes)
 	);
 
-	GraphEditorCommands->MapAction(FGenericCommands::Get().Duplicate,
+	GraphEditorCommands->MapAction(
+		Commands.Duplicate,
 		FExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::DuplicateNodes),
 		FCanExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::CanDuplicateNodes)
 	);
@@ -472,11 +495,120 @@ void FAssetEditor_Dialogue::CreateGraphCommandList()
 void FAssetEditor_Dialogue::BindCommands()
 {
 	FDialogueEditorCommands::Register();
+	const FDialogueEditorCommands& Commands = FDialogueEditorCommands::Get();
 
-	ToolkitCommands->MapAction(FDialogueEditorCommands::Get().AddSnippet,
+	ToolkitCommands->MapAction(
+		Commands.AddSnippet,
 		FExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::ApplySelectedSnippet),
 		FCanExecuteAction::CreateRaw(this, &FAssetEditor_Dialogue::CanApplySnippet)
 	);
+}
+
+
+void FAssetEditor_Dialogue::BindDebuggerCommands()
+{
+	FDialogueDebuggerCommands::Register();
+	const FDialogueDebuggerCommands& Commands = FDialogueDebuggerCommands::Get();
+
+	TSharedRef<FDialogueDebugger> DebuggerOb = Debugger.ToSharedRef();
+
+	ToolkitCommands->MapAction(
+		Commands.StepBack,
+		FExecuteAction::CreateSP(DebuggerOb, &FDialogueDebugger::StepBack),
+		FCanExecuteAction::CreateSP(DebuggerOb, &FDialogueDebugger::CanStepBack));
+
+	ToolkitCommands->MapAction(
+		Commands.StepForward,
+		FExecuteAction::CreateSP(DebuggerOb, &FDialogueDebugger::StepForward),
+		FCanExecuteAction::CreateSP(DebuggerOb, &FDialogueDebugger::CanStepForward));
+
+	ToolkitCommands->MapAction(
+		Commands.StepToBegin,
+		FExecuteAction::CreateSP(DebuggerOb, &FDialogueDebugger::StepToBegin),
+		FCanExecuteAction::CreateSP(DebuggerOb, &FDialogueDebugger::CanStepToBegin));
+
+	ToolkitCommands->MapAction(
+		Commands.StepToEnd,
+		FExecuteAction::CreateSP(DebuggerOb, &FDialogueDebugger::StepToEnd),
+		FCanExecuteAction::CreateSP(DebuggerOb, &FDialogueDebugger::CanStepToEnd));
+}
+
+void FAssetEditor_Dialogue::ExtendToolbar()
+{
+	struct Local
+	{
+		static void FillToolbar(FToolBarBuilder& ToolbarBuilder, TWeakPtr<FAssetEditor_Dialogue> Editor)
+		{
+			TSharedPtr<FAssetEditor_Dialogue> EditorPtr = Editor.Pin();
+
+
+			ToolbarBuilder.BeginSection("Debugger");
+			{			
+				const bool bCanShowDebugger = EditorPtr->IsDebuggerReady();
+				if (bCanShowDebugger)
+				{
+					TSharedRef<SWidget> TargetSelectionBox = SNew(SComboButton)
+					.OnGetMenuContent(EditorPtr.Get(), &FAssetEditor_Dialogue::OnGetDebuggerActorsMenu )
+					.ButtonContent()
+					[
+						SNew(STextBlock)
+						.ToolTipText( LOCTEXT("SelectDebugExecutor", "Pick executor to debug") )
+						.Text(EditorPtr.Get(), &FAssetEditor_Dialogue::GetDebuggerDesc )
+					];
+
+					TSharedRef<SWidget> VerbositySelectionBox = 
+					SNew(SBox)
+					.MinDesiredWidth(100.0f)
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().HAlign(HAlign_Center).Padding(0.0f, 0.0f, 0.0f, 2.0f)
+						[
+							SNew(STextBlock)
+							.Text(LOCTEXT("SelectDebugVerbosityHint", "Verbosity"))
+						]
+						+ SVerticalBox::Slot().AutoHeight()
+						[
+							SNew(SComboButton)
+							.OnGetMenuContent(EditorPtr.Get(), &FAssetEditor_Dialogue::OnGetDebuggerVerbosityMenu )
+							.ButtonContent()
+							[
+								SNew(STextBlock)
+								.ToolTipText( LOCTEXT("SelectDebugVerbosity", "Pick debug verbosity") )
+								.Text(EditorPtr.Get(), &FAssetEditor_Dialogue::GetDebuggerVerbosityDesc )
+							]
+						]
+					];
+
+					ToolbarBuilder.AddWidget(VerbositySelectionBox);
+
+					ToolbarBuilder.AddSeparator();
+					
+					ToolbarBuilder.AddToolBarButton(FDialogueDebuggerCommands::Get().StepToBegin);
+					ToolbarBuilder.AddToolBarButton(FDialogueDebuggerCommands::Get().StepBack);	
+					ToolbarBuilder.AddToolBarButton(FDialogueDebuggerCommands::Get().StepForward);
+					ToolbarBuilder.AddToolBarButton(FDialogueDebuggerCommands::Get().StepToEnd);
+
+					ToolbarBuilder.AddSeparator();				
+
+					ToolbarBuilder.AddWidget(TargetSelectionBox);
+
+				}
+			}
+			ToolbarBuilder.EndSection();
+
+		}
+	};
+	TWeakPtr<FAssetEditor_Dialogue> EditorPtr = SharedThis(this);
+	TSharedPtr<FExtender> ToolbarExtender = MakeShareable(new FExtender);
+	
+	ToolbarExtender->AddToolBarExtension(
+		"Asset",
+		EExtensionHook::After,
+		GetToolkitCommands(),
+		FToolBarExtensionDelegate::CreateStatic(&Local::FillToolbar, EditorPtr)
+	);
+	
+	AddToolbarExtender(ToolbarExtender);
 }
 
 
@@ -543,6 +675,8 @@ void FAssetEditor_Dialogue::RebuildDialogueGraph()
 	EdGraph->RebuildDialogueGraph();
 }
 
+
+
 TSharedPtr<SGraphEditor> FAssetEditor_Dialogue::GetGraphEditor() const
 {
 	return ViewportWidget;
@@ -558,6 +692,98 @@ FGraphPanelSelectionSet FAssetEditor_Dialogue::GetSelectedNodes() const
 	}
 
 	return CurrentSelection;
+}
+
+bool FAssetEditor_Dialogue::IsDebuggerReady() const
+{
+	return Debugger.IsValid() && Debugger->IsDebuggerReady();
+}
+
+FText FAssetEditor_Dialogue::GetDebuggerDesc() const
+{
+	return Debugger.IsValid() ? FText::FromString(Debugger->GetDebuggedInstanceDesc()) : FText::GetEmpty();
+}
+
+TSharedRef<class SWidget> FAssetEditor_Dialogue::OnGetDebuggerActorsMenu()
+{
+	FMenuBuilder MenuBuilder(true, NULL);
+
+	if (Debugger.IsValid())
+	{
+		TArray<UDialogueExecutorBase*> MatchingInstances;
+		Debugger->GetMatchingInstances(MatchingInstances);
+
+		// Fill the combo menu with presets of common screen resolutions
+		for (int32 i = 0; i < MatchingInstances.Num(); i++)
+		{
+			if (MatchingInstances[i])
+			{
+				const FText Desc = FText::FromString(Debugger->DescribeInstance(*MatchingInstances[i]));
+				TWeakObjectPtr<UDialogueExecutorBase> InstancePtr = MatchingInstances[i];
+
+				FUIAction ItemAction(FExecuteAction::CreateSP(this, &FAssetEditor_Dialogue::OnDebuggerActorSelected, InstancePtr));
+				MenuBuilder.AddMenuEntry(Desc, TAttribute<FText>(), FSlateIcon(), ItemAction);
+			}
+		}
+
+		// Failsafe when no match
+		if (MatchingInstances.Num() == 0)
+		{
+			const FText Desc = LOCTEXT("NoMatchForDebug", "Can't find matching executors");
+			TWeakObjectPtr<UDialogueExecutorBase> InstancePtr;
+
+			FUIAction ItemAction(FExecuteAction::CreateSP(this, &FAssetEditor_Dialogue::OnDebuggerActorSelected, InstancePtr));
+			MenuBuilder.AddMenuEntry(Desc, TAttribute<FText>(), FSlateIcon(), ItemAction);
+		}
+	}
+
+	return MenuBuilder.MakeWidget();
+}
+
+void FAssetEditor_Dialogue::OnDebuggerActorSelected(TWeakObjectPtr<UDialogueExecutorBase> InstanceToDebug)
+{
+	if (Debugger.IsValid())
+	{
+		Debugger->OnInstanceSelectedInDropdown(InstanceToDebug.Get());
+	}
+}
+
+FText FAssetEditor_Dialogue::GetDebuggerVerbosityDesc() const
+{
+	if (Debugger.IsValid())
+	{
+		return FText::FromString(Debugger->GetCurrentVerbosity()->Name.ToString());
+	}
+	return FText::GetEmpty();
+}
+
+TSharedRef<class SWidget> FAssetEditor_Dialogue::OnGetDebuggerVerbosityMenu()
+{
+	FMenuBuilder MenuBuilder(true, NULL);
+
+	if (Debugger.IsValid())
+	{
+		const TArray<TSharedRef<FDialogueDebuggerStepVerbosity>>& Levels = Debugger->GetVerbosityLevels();
+		for (const auto& Level : Levels)
+		{
+			const FText Desc = FText::FromName(Level->Name);
+			const FText ToolTip = FText::FromString(Level->Description);
+
+			FUIAction ItemAction(FExecuteAction::CreateSP(this, &FAssetEditor_Dialogue::OnDebuggerVerbositySelected, Level->Name));
+			MenuBuilder.AddMenuEntry(Desc, ToolTip, FSlateIcon(), ItemAction);
+		}
+	}
+
+	return MenuBuilder.MakeWidget();
+}
+
+
+void FAssetEditor_Dialogue::OnDebuggerVerbositySelected(FName Verbosity)
+{
+	if (Debugger.IsValid())
+	{
+		Debugger->OnVerbosityLevelSelectedInDropdown(Verbosity);
+	}
 }
 
 /*--------------------------------------------

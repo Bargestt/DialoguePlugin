@@ -10,7 +10,7 @@
 
 
 /** */
-USTRUCT()
+USTRUCT(BlueprintInternalUseOnly)
 struct FDialogueNodeTemplate : public FTableRowBase
 {
 	GENERATED_BODY()
@@ -30,7 +30,7 @@ struct FDialogueNodeTemplate : public FTableRowBase
 };
 
 
-USTRUCT()
+USTRUCT(BlueprintInternalUseOnly)
 struct FDialogueNodeSnippet : public FTableRowBase
 {
 	GENERATED_BODY()
@@ -159,6 +159,11 @@ public:
 	TMap<FName, FLinearColor> CustomTypeNodeBorderColor;
 
 
+	UPROPERTY(config, EditAnywhere, Category = "Graph: Nodes")
+	float NodeIconScale;
+
+	UPROPERTY(config, EditAnywhere, Category = "Graph: Nodes")
+	float NodeIconHoverScale;
 
 
 	/** Limit line number in node body */
@@ -204,4 +209,16 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "Graph: Wires")
 	float ReturnWireThicknessScale;
 
+
+	UPROPERTY(config, EditAnywhere, Category = "Graph: Debugger")
+	FLinearColor DebuggerState_Active;
+
+	UPROPERTY(config, EditAnywhere, Category = "Graph: Debugger")
+	FLinearColor DebuggerState_Completed;
+
+	UPROPERTY(config, EditAnywhere, Category = "Graph: Debugger")
+	FLinearColor DebuggerState_EntryAllowed;
+
+	UPROPERTY(config, EditAnywhere, Category = "Graph: Debugger")
+	FLinearColor DebuggerState_EntryDenied;
 };

@@ -1,10 +1,13 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "DialoguePluginEditor.h"
+
+#include "Dialogue.h"
+#include "DialogueExecutor.h"
+
 #include <AssetToolsModule.h>
 
 #include "Asset/AssetTypeActions_Dialogue.h"
-
 
 #include "Editor/EditorCommands_Dialogue.h"
 #include "DialogueStyle.h"
@@ -15,6 +18,9 @@
 #include "Editor/EdGraphNode_DialogueNode.h"
 #include "Customizations/DialogueParticipantCustomization.h"
 #include "DialogueParticipantRegistry.h"
+#include "Customizations/ExecutorSetupCustomization.h"
+
+
 
 
 #define LOCTEXT_NAMESPACE "FDialoguePluginEditor"
@@ -79,6 +85,7 @@ public:
 		{
 			FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked< FPropertyEditorModule >("PropertyEditor");
 			REG_CUSTOMIZATION(PropertyModule, FDialogueParticipant, FDialogueParticipantCustomization);
+			REG_CUSTOMIZATION(PropertyModule, FExecutorSetup, FExecutorSetupCustomization);
 			REG_CLASS_CUSTOMIZATION(PropertyModule, UEdGraphNode_DialogueNode, FDialogueNodeCustomization);
 		}
 	}

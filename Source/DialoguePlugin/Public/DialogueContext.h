@@ -10,7 +10,7 @@
 /**
  * Base context class for each node
  */
-UCLASS(Abstract, Blueprintable, editinlinenew, meta = (ShowWorldContextPin))
+UCLASS(Abstract, Blueprintable, BlueprintType, editinlinenew, meta = (ShowWorldContextPin))
 class DIALOGUEPLUGIN_API UDialogueNodeContext : public UObject
 {
 	GENERATED_BODY()

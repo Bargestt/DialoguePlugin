@@ -9,6 +9,15 @@
 #include "DialogueParticipantInterface.h"
 #include "DialogueEvent.h"
 
+#if WITH_EDITOR
+#include <Logging/MessageLog.h>
+#include <Logging/TokenizedMessage.h>
+#include <Misc/UObjectToken.h>
+#endif // WITH_EDITOR
+
+#define LOCTEXT_NAMESPACE "DialogueExecutor"
+
+UDialogueExecutorBase::FOnExecutorCreated UDialogueExecutorBase::OnExecutorCreated;
 
 UDialogueExecutorBase::UDialogueExecutorBase()
 {
@@ -38,25 +47,24 @@ bool UDialogueExecutorBase::WasInitialized() const
 	return bWasInitialized;
 }
 
-UObject* UDialogueExecutorBase::GetParticipantFromNode(const FDialogueNode* Node, bool bEnsureInterface /*= false*/) const
+
+UObject* UDialogueExecutorBase::ResolveParticipant(const FDialogueParticipant& Participant) const
 {
-	UObject* Participant = nullptr;
-
-	if (Node)
+	if (Participant.Name != NAME_None)
 	{
-		Participant = Node->Participant.Object;
-		if (Participant == nullptr && Node->Participant.Name != NAME_None)
-		{
-			Participant = Participants.FindRef(Node->Participant.Name);
-		}
-
-		if (bEnsureInterface && Participant && !Participant->Implements<UDialogueParticipantInterface>())
-		{
-			Participant = nullptr;
-		}
+		return Participants.FindRef(Participant.Name);
 	}
 
-	return Participant;
+	return Participant.Object;
+}	
+
+void UDialogueExecutorBase::SetDialogue(UDialogue* NewDialogue)
+{
+	if (NewDialogue != Dialogue)
+	{
+		Dialogue = NewDialogue;
+		DIALOGUE_LOG_CLEAR();
+	}		
 }
 
 UDialogue* UDialogueExecutorBase::GetDialogue() const
@@ -73,7 +81,10 @@ UObject* UDialogueExecutorBase::GetNodeParticipant(int32 NodeId) const
 {
 	if (Dialogue)
 	{
-		return GetParticipantFromNode(Dialogue->GetNodeMap().Find(NodeId));
+		if (const FDialogueNode* Node = Dialogue->GetNodeMap().Find(NodeId))
+		{
+			return ResolveParticipant(Node->Participant);
+		}
 	}
 	return nullptr;
 }
@@ -89,6 +100,14 @@ void UDialogueExecutorBase::SetParticipant(FName Name, UObject* InParticipant, b
 	if (Participant == nullptr || bOverrideExisting)
 	{
 		Participant = InParticipant;
+	}
+}
+
+void UDialogueExecutorBase::SetParticipantMap(const TMap<FName, UObject*>& NewParticipants, bool bOverrideExisting /*= true*/)
+{
+	for (const auto& Pair : NewParticipants)
+	{
+		SetParticipant(Pair.Key, Pair.Value);
 	}
 }
 
@@ -108,10 +127,11 @@ bool UDialogueExecutorBase::CheckNodeCondition(int32 NodeId)
 	if (Dialogue)
 	{
 		const FDialogueNode* Node = Dialogue->GetNodeMap().Find(NodeId);
-		if (Node)
-		{
-			return Node->Condition == nullptr || Node->Condition->CheckCondition(this);
-		}
+
+		bool bCanEnter = Node->Condition == nullptr || Node->Condition->CheckCondition(this);
+		DIALOGUE_LOG_ADD(FDialogueExecutionStep(NodeId, bCanEnter ? FDialogueExecutionStep::EntryAllowed : FDialogueExecutionStep::EntryDenied));
+
+		return bCanEnter;
 	}
 	
 	return false;
@@ -135,9 +155,11 @@ TArray<int32> UDialogueExecutorBase::FindAvailableNextNodes(int32 NodeId, bool b
 				(Child->Context == nullptr || Child->Context->CanEnterNode(this, NodeId)) &&
 				(Child->Condition == nullptr || Child->Condition->CheckCondition(this));
 
+
+			DIALOGUE_LOG_ADD(FDialogueExecutionStep(ChildId, bCanEnterChild ? FDialogueExecutionStep::EntryAllowed : FDialogueExecutionStep::EntryDenied));
 			if (bCanEnterChild)
 			{
-				AvailableChildren.Add(ChildId);
+				AvailableChildren.Add(ChildId);				
 
 				if (bStopOnFirst)
 				{
@@ -154,6 +176,23 @@ TArray<int32> UDialogueExecutorBase::FindAvailableNextNodes(int32 NodeId, bool b
 bool UDialogueExecutorBase::MoveToNode(int32 FromNodeId, int32 ToNodeId, int32& FinalNodeId)
 {
 	FinalNodeId = INDEX_NONE;
+
+	if (bTransitionInProgress)
+	{
+#if WITH_EDITOR
+		FMessageLog("PIE").Error()
+			->AddToken(FTextToken::Create(LOCTEXT("Blueprint", "Blueprint:")))
+			->AddToken(GetOuter() ? FUObjectToken::Create(GetOuter()->GetClass(), GetOuter()->GetClass()->GetDisplayNameText()) : FUObjectToken::Create(nullptr))
+			->AddToken(FTextToken::Create(LOCTEXT("Executor", " Executor:")))
+			->AddToken(FUObjectToken::Create(this))
+			->AddToken(FTextToken::Create(LOCTEXT("MoveToNodeError", "Recursive MoveToNode calls are prohibited")));
+
+#endif //WITH_EDITOR
+		return false;
+	}
+	bTransitionInProgress = true;
+
+	
 	if (Dialogue)
 	{
 		if (FromNodeId == ToNodeId)
@@ -177,6 +216,7 @@ bool UDialogueExecutorBase::MoveToNode(int32 FromNodeId, int32 ToNodeId, int32& 
 		}
 	}	
 
+	bTransitionInProgress = false;
 	return FinalNodeId >= 0;
 }
 
@@ -217,7 +257,7 @@ void UDialogueExecutorBase::FormatText(FText InText, int32 NodeId, FText& OutTex
 	if (Dialogue)
 	{
 		Node = Dialogue->GetNodeMap().Find(NodeId);
-		Participant = GetParticipantFromNode(Node);
+		Participant = Node ? ResolveParticipant(Node->Participant) : nullptr;
 		Context = Node ? Node->Context : nullptr;
 	}
 
@@ -273,7 +313,13 @@ void UDialogueExecutorBase::FormatText(FText InText, int32 NodeId, FText& OutTex
 		FString FuncNamePart;
 		if (!ArgumentName.Split(TEXT("."), &TargetPart, &FuncNamePart))
 		{
-			UE_LOG(LogDialogue, Error, TEXT("UDialogueExecutor::FormatText: Invalid argument %s. Argument must be in format {TargetName.FunctionName}"), *ArgumentName);
+#if WITH_EDITOR
+			FMessageLog("PIE").Error()
+				->AddToken(FTextToken::Create(LOCTEXT("Executor", "Executor:")))
+				->AddToken(FUObjectToken::Create(this))
+				->AddToken(FTextToken::Create(FText::FormatOrdered(LOCTEXT("FormatError_InvalidArg", " Invalid argument {0}. Argument must be in format {TargetName.FunctionName}"), FText::FromString(ArgumentName))));
+			
+#endif // WITH_EDITOR
 			continue;
 		}
 		FName TargetName = *TargetPart;
@@ -305,14 +351,27 @@ void UDialogueExecutorBase::FormatText(FText InText, int32 NodeId, FText& OutTex
 
 		if (!TargetObject)
 		{
-			UE_LOG(LogDialogue, Error, TEXT("UDialogueExecutor::FormatText: Target not found %s"), *ArgumentName);
+#if WITH_EDITOR
+			FMessageLog("PIE").Error()
+				->AddToken(FTextToken::Create(LOCTEXT("Executor", "Executor:")))
+				->AddToken(FUObjectToken::Create(this))
+				->AddToken(FTextToken::Create(FText::FormatOrdered(LOCTEXT("FormatError_NoTarget", " Target '{0}' not found"), FText::FromString(ArgumentName))))
+				->AddToken(FTextToken::Create(LOCTEXT("FormatError_AllowedTargets", "Allowed targets: Executor, Dialogue, Participant, Context and all ParticipantKeys")));
+			
+#endif // WITH_EDITOR
 			continue;
 		}
 			
 		UFunction* Func = TargetObject->FindFunction(FName(*FuncNamePart));
 		if (!Func)
 		{
-			UE_LOG(LogDialogue, Error, TEXT("UDialogueExecutor::FormatText: Function %s not found in %s"), *FuncNamePart, *TargetObject->GetName());
+#if WITH_EDITOR
+			FMessageLog("PIE").Error()
+				->AddToken(FTextToken::Create(LOCTEXT("Executor", "Executor:")))
+				->AddToken(FUObjectToken::Create(this))
+				->AddToken(FTextToken::Create(FText::FormatOrdered(LOCTEXT("FormatError_NoFunction", " Function '{0}' not found in "), FText::FromString(FuncNamePart))))
+				->AddToken(FUObjectToken::Create(TargetObject));
+#endif // WITH_EDITOR
 			continue;
 		}
 
@@ -334,22 +393,51 @@ void UDialogueExecutorBase::FormatText(FText InText, int32 NodeId, FText& OutTex
 				ReturnType.SetType(Prop);
 			}
 		}		
-
-		if (ReturnArguments != 1)
-		{
-			UE_LOG(LogDialogue, Error, TEXT("UDialogueExecutor::FormatText: Function: %s: Function must have one output"), *Func->GetName());
-			continue;
-		}
+		
+		bool bFunctionValid = true;
 
 		if (bHasInputArguments)
 		{
-			UE_LOG(LogDialogue, Error, TEXT("UDialogueExecutor::FormatText: Function: %s: Function must have no input"), *Func->GetName());
-			continue;
+			bFunctionValid = false;
+#if WITH_EDITOR
+			FMessageLog("PIE").Error()
+				->AddToken(FTextToken::Create(LOCTEXT("Executor", "Executor:")))
+				->AddToken(FUObjectToken::Create(this))
+				->AddToken(FTextToken::Create(LOCTEXT("FormatError_FuncError", " Function")))
+				->AddToken(FUObjectToken::Create(Func))
+				->AddToken(FTextToken::Create(LOCTEXT("FormatError_HasInput", " must have no input")));	
+#endif // WITH_EDITOR
+		}
+		
+		if (ReturnArguments != 1)
+		{
+			bFunctionValid = false;
+#if WITH_EDITOR
+			FMessageLog("PIE").Error()
+				->AddToken(FTextToken::Create(LOCTEXT("Executor", "Executor:")))
+				->AddToken(FUObjectToken::Create(this))
+				->AddToken(FTextToken::Create(LOCTEXT("FormatError_FuncError", " Function")))
+				->AddToken(FUObjectToken::Create(Func))
+				->AddToken(FTextToken::Create(LOCTEXT("FormatError_NoOutput", " must have one output")));
+#endif // WITH_EDITOR
 		}
 
 		if (ReturnType.Type == FPropertyTypeChecker::EType::None)
 		{
-			UE_LOG(LogDialogue, Error, TEXT("UDialogueExecutor::FormatText: Function: %s Unrecognized output parameter in %s"), *Func->GetName());
+			bFunctionValid = false;
+#if WITH_EDITOR
+			FMessageLog("PIE").Error()
+				->AddToken(FTextToken::Create(LOCTEXT("Executor", "Executor:")))
+				->AddToken(FUObjectToken::Create(this))
+				->AddToken(FTextToken::Create(LOCTEXT("FormatError_FuncError", " Function")))
+				->AddToken(FUObjectToken::Create(Func))
+				->AddToken(FTextToken::Create(LOCTEXT("FormatError_WrongOutput", " has unrecognized output.")))
+				->AddToken(FTextToken::Create(LOCTEXT("FormatError_AllowedTypes", "Allowed types: Text, String, Name, Int32, Float")));
+#endif // WITH_EDITOR
+		}
+
+		if (!bFunctionValid)
+		{
 			continue;
 		}
 		
@@ -398,7 +486,11 @@ void UDialogueExecutorBase::FormatText(FText InText, int32 NodeId, FText& OutTex
 
 void UDialogueExecutorBase::HandleCreated()
 {
-	bWasCreated = true;
+	if (!bWasCreated)
+	{
+		bWasCreated = true;
+		OnExecutorCreated.Broadcast(*this);
+	}
 }
 
 void UDialogueExecutorBase::HandleInit()
@@ -415,7 +507,7 @@ void UDialogueExecutorBase::HandleNodeLeave(int32 NodeId)
 	{
 		if (const FDialogueNode* Node = Dialogue->GetNodeMap().Find(NodeId))
 		{
-			UObject* Participant = GetParticipantFromNode(Node, true);
+			UObject* Participant = ResolveParticipant(Node->Participant);
 			if (Participant)
 			{
 				IDialogueParticipantInterface::Execute_OnNodeLeft(Participant, this, Dialogue, NodeId);
@@ -442,7 +534,7 @@ void UDialogueExecutorBase::HandleNodeEnter(int32 NodeId)
 	{
 		if (const FDialogueNode* Node = Dialogue->GetNodeMap().Find(NodeId))
 		{
-			UObject* Participant = GetParticipantFromNode(Node, true);
+			UObject* Participant = ResolveParticipant(Node->Participant);
 			if (Participant)
 			{
 				IDialogueParticipantInterface::Execute_OnNodeEntered(Participant, this, Dialogue, NodeId);
@@ -465,24 +557,75 @@ void UDialogueExecutorBase::HandleNodeEnter(int32 NodeId)
 
 
 
-UDialogueExecutor::UDialogueExecutor()
+void UDialogueExecutorBase::HandleNodeExecutionBegin(int32 NodeId)
 {
-	CurrentNodeId = -1;
+	DIALOGUE_LOG_ADD(FDialogueExecutionStep(NodeId, FDialogueExecutionStep::Active));
+	OnNodeExecutionBegin.Broadcast(NodeId);
 }
+
+void UDialogueExecutorBase::HandleNodeExecutionEnd(int32 NodeId)
+{
+	if (!Dialogue)
+	{	
+		return;
+	}
+
+	if (const FDialogueNode* Node = Dialogue->GetNodeMap().Find(NodeId))
+	{
+		UObject* Participant = ResolveParticipant(Node->Participant);
+		if (Participant)
+		{
+			IDialogueParticipantInterface::Execute_OnNodeFinished(Participant, this, Dialogue, NodeId);
+		}
+
+		if (Node->Context)
+		{
+			Node->Context->OnNodeFinished(this);
+		}
+	}
+
+	DIALOGUE_LOG_ADD(FDialogueExecutionStep(NodeId, FDialogueExecutionStep::Finished));
+	OnNodeExecutionEnd.Broadcast(NodeId);
+}
+
+
+
 
 /*--------------------------------------------
  	UDialogueExecutor
  *--------------------------------------------*/
 
+UDialogueExecutor::UDialogueExecutor()
+{
+	CurrentNodeId = -1;
+}
+
+
+void UDialogueExecutor::SetDialogue(UDialogue* NewDialogue)
+{
+	if (IsExecutionInProgress())
+	{
+#if WITH_EDITOR
+		FMessageLog("PIE").Error()
+			->AddToken(FTextToken::Create(LOCTEXT("Blueprint", "Blueprint:")))
+			->AddToken(GetOuter() ? FUObjectToken::Create(GetOuter()->GetClass(), GetOuter()->GetClass()->GetDisplayNameText()) : FUObjectToken::Create(nullptr))
+			->AddToken(FTextToken::Create(LOCTEXT("Executor", " Executor:")))
+			->AddToken(FUObjectToken::Create(this))
+			->AddToken(FTextToken::Create(LOCTEXT("SetDialogueFailed", " Failed to set new dialogue: Execution in progress")));
+#endif // WITH_EDITOR
+		return;
+	}
+	Super::SetDialogue(NewDialogue);
+}
  
 bool UDialogueExecutor::BeginExecution(FName EntryPoint)
 {
-	return Dialogue && BeginExecution_Internal(Dialogue->GetEntryId(EntryPoint), EntryPoint);
+	return BeginExecution_Internal(Dialogue ? Dialogue->GetEntryId(EntryPoint) : INDEX_NONE, EntryPoint);
 }
 
 bool UDialogueExecutor::BeginExecutionAtNode(int32 NodeId)
 {
-	return Dialogue && BeginExecution_Internal(NodeId, NAME_None);
+	return BeginExecution_Internal(NodeId, NAME_None);
 }
 
 bool UDialogueExecutor::BeginExecution_Internal(int32 NodeId, FName EntryPoint)
@@ -494,20 +637,44 @@ bool UDialogueExecutor::BeginExecution_Internal(int32 NodeId, FName EntryPoint)
 
 	if (!Dialogue)
 	{
-		UE_LOG(LogDialogue, Error, TEXT("[%s] Failed to start dialogue execution: No dialogue"), *GetName());
+#if WITH_EDITOR
+		FMessageLog("PIE").Error()
+			->AddToken(FTextToken::Create(LOCTEXT("Blueprint", "Blueprint:")))
+			->AddToken(GetOuter() ? FUObjectToken::Create(GetOuter()->GetClass(), GetOuter()->GetClass()->GetDisplayNameText()) : FUObjectToken::Create(nullptr))
+			->AddToken(FTextToken::Create(LOCTEXT("Executor", " Executor:")))
+			->AddToken(FUObjectToken::Create(this))
+			->AddToken(FTextToken::Create(LOCTEXT("ExecutionStartError"," Failed to start execution:")))
+			->AddToken(FTextToken::Create(LOCTEXT("ExecutionError_NoAsset", "No dialogue")));
+#endif // WITH_EDITOR
 		return false;
 	}
 	if (NodeId < 0)
-	{
-		UE_LOG(LogDialogue, Error, TEXT("[%s] Failed to start dialogue execution: Invalid node"), *GetName());
+	{		
+#if WITH_EDITOR
+		FMessageLog("PIE").Error()
+			->AddToken(FTextToken::Create(LOCTEXT("Blueprint", "Blueprint:")))
+			->AddToken(GetOuter() ? FUObjectToken::Create(GetOuter()->GetClass(), GetOuter()->GetClass()->GetDisplayNameText()) : FUObjectToken::Create(nullptr))
+			->AddToken(FTextToken::Create(LOCTEXT("Executor", " Executor:")))
+			->AddToken(FUObjectToken::Create(this))
+			->AddToken(FTextToken::Create(LOCTEXT("ExecutionStartError", " Failed to start execution:")))
+			->AddToken(FTextToken::Create(LOCTEXT("ExecutionError_InvalidNode", "Invalid node")));
+#endif // WITH_EDITOR
 		return false;
 	}
-	if (bExecutionCleanupInProgress || IsExecutionInProgress())
+	if (bNodeExecutionCleanupInProgress || IsExecutionInProgress())
 	{
-		UE_LOG(LogDialogue, Error, TEXT("[%s] Failed to start dialogue execution: Already started"), *GetName());
+#if WITH_EDITOR
+		FMessageLog("PIE").Warning()
+			->AddToken(FTextToken::Create(LOCTEXT("Blueprint", "Blueprint:")))
+			->AddToken(GetOuter() ? FUObjectToken::Create(GetOuter()->GetClass(), GetOuter()->GetClass()->GetDisplayNameText()) : FUObjectToken::Create(nullptr))
+			->AddToken(FTextToken::Create(LOCTEXT("Executor", " Executor:")))
+			->AddToken(FUObjectToken::Create(this))
+			->AddToken(FTextToken::Create(LOCTEXT("ExecutionStartError", " Failed to start execution:")))
+			->AddToken(FTextToken::Create(LOCTEXT("ExecutionError_AlreadyStarted", "Execution in progress")));
+#endif // WITH_EDITOR
 		return false;
 	}
-
+	
 	CurrentNodeId = NodeId;
 
 	if (GetClass()->HasAnyClassFlags(CLASS_CompiledFromBlueprint) || !GetClass()->HasAnyClassFlags(CLASS_Native))
@@ -522,48 +689,46 @@ bool UDialogueExecutor::BeginExecution_Internal(int32 NodeId, FName EntryPoint)
 
 void UDialogueExecutor::ExecuteCurrentNode()
 {
-	if (CurrentNodeId < 0 || bExecutionInProgress)
+	if (CurrentNodeId < 0 || bNodeExecutionInProgress)
 	{
 		return;
 	}
-	bExecutionInProgress = true;
+	bNodeExecutionInProgress = true;
 
-	OnNodeExecutionBegin.Broadcast(CurrentNodeId);	
+	HandleNodeExecutionBegin(CurrentNodeId);
 	NodeExecutionBegin();
 }
 
 void UDialogueExecutor::FinishNodeExecution(int32 NextNodeId)
 {	
-	if (!bExecutionInProgress || bExecutionCleanupInProgress)
+	if (!bNodeExecutionInProgress)
 	{
 		return;
 	}		
-	bExecutionCleanupInProgress = true;
 
-	if (Dialogue)
-	{	
-		if (const FDialogueNode* Node = Dialogue->GetNodeMap().Find(CurrentNodeId))
-		{
-			UObject* Participant = GetParticipantFromNode(Node, true);
-			if (Participant)
-			{
-				IDialogueParticipantInterface::Execute_OnNodeFinished(Participant, this, Dialogue, CurrentNodeId);
-			}
-
-			if (Node->Context)
-			{
-				Node->Context->OnNodeFinished(this);
-			}
-		}
+	if (bNodeExecutionCleanupInProgress)
+	{
+#if WITH_EDITOR
+		FMessageLog("PIE").Warning()
+			->AddToken(FTextToken::Create(LOCTEXT("Blueprint", "Blueprint:")))
+			->AddToken(GetOuter() ? FUObjectToken::Create(GetOuter()->GetClass(), GetOuter()->GetClass()->GetDisplayNameText()) : FUObjectToken::Create(nullptr))
+			->AddToken(FTextToken::Create(LOCTEXT("Executor", " Executor:")))
+			->AddToken(FUObjectToken::Create(this))
+			->AddToken(FTextToken::Create(LOCTEXT("ExecutionFinishError", "Failed to finish execution")))
+			->AddToken(FTextToken::Create(LOCTEXT("ExecutionError_Recusrsive", "Recursive call")));
+#endif // WITH_EDITOR
+		return;
 	}
 
+	bNodeExecutionCleanupInProgress = true;
+	
 	NodeExecutionEnd();
-	OnNodeExecutionEnd.Broadcast(CurrentNodeId);	
-	bExecutionCleanupInProgress = false;
+	HandleNodeExecutionEnd(CurrentNodeId);
+	bNodeExecutionCleanupInProgress = false;
 
-	bExecutionInProgress = false;
+	bNodeExecutionInProgress = false;
 
-	if (NextNodeId >= 0 && MoveToNode(CurrentNodeId, NextNodeId, CurrentNodeId))
+	if (MoveToNode(CurrentNodeId, NextNodeId, CurrentNodeId))
 	{
 		ExecuteCurrentNode();
 	}
@@ -577,6 +742,14 @@ void UDialogueExecutor::FinishNodeExecution(int32 NextNodeId)
 	}
 }
 
+void UDialogueExecutor::StopExecution()
+{
+	if (IsExecutionInProgress())
+	{
+		FinishNodeExecution(INDEX_NONE);
+	}
+}
+
 bool UDialogueExecutor::IsExecutionInProgress() const
 {
 	return CurrentNodeId >= 0;
@@ -586,3 +759,5 @@ int32 UDialogueExecutor::GetCurrentNodeId() const
 {
 	return CurrentNodeId;
 }
+
+#undef  LOCTEXT_NAMESPACE 

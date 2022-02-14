@@ -20,6 +20,7 @@
 #include <Widgets/Text/SInlineEditableTextBlock.h>
 #include <Widgets/Layout/SScrollBox.h>
 #include "EdGraphNode_DialogueNode.h"
+#include <Widgets/Layout/SConstraintCanvas.h>
 
 
 #define LOCTEXT_NAMESPACE "SGraphNode_Dialogue"
@@ -142,19 +143,45 @@ public:
 		SLATE_ATTRIBUTE(const FSlateBrush*, Image)
 	SLATE_END_ARGS()
 
-	void Construct( const FArguments& InArgs, float Size )
+	void Construct( const FArguments& InArgs, float Size, float InHoverSize = -1.0f)
 	{
+		DefaultSize = Size;		
+		HoverSize = InHoverSize;
+
 		ChildSlot
 		[
-			SNew(SBox)
-			.HeightOverride(Size)
-			.WidthOverride(Size)
+			SNew(SConstraintCanvas)
+			+ SConstraintCanvas::Slot()
+			.Anchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f))
+			.Alignment(FVector2D(0.5f))
+			.Offset(TAttribute<FMargin>(this, &SOverlayIcon::GetImageSize))
 			[
 				SNew(SImage)
 				.Image(InArgs._Image)
 			]			
 		];
 	}	
+
+	FMargin GetImageSize() const
+	{
+		float Size = (HoverSize > 0 && IsHovered()) ? HoverSize : DefaultSize;
+		return FMargin(0.0f, 0.0f, Size, Size);
+	}
+
+protected:
+
+	virtual FVector2D ComputeDesiredSize(float) const override
+	{
+		if (GetVisibility() != EVisibility::Collapsed)
+		{
+			return FVector2D(DefaultSize);
+		}
+		return FVector2D::ZeroVector;
+	}
+
+protected:
+	float HoverSize;
+	float DefaultSize;
 };
 
 
@@ -167,7 +194,9 @@ void SGraphNode_Dialogue::Construct(const FArguments& InArgs, UEdGraphNode_Dialo
 	DialogueSettings = UDialogueEditorSettings::Get();
 
 	OverlayIconSize = 24.0f;
-	OverlayMainIconSize = 32.0f;
+	OverlayMainIconSize = 32.0f * DialogueSettings->NodeIconScale;
+	float HoverSize = FMath::Max(OverlayMainIconSize, OverlayMainIconSize * DialogueSettings->NodeIconHoverScale);
+
 
 	ExecutionWidget = 
 		SNew(SExecutionIndex)
@@ -175,7 +204,7 @@ void SGraphNode_Dialogue::Construct(const FArguments& InArgs, UEdGraphNode_Dialo
 		.Text(this, &SGraphNode_Dialogue::GetIndexText)
 		.OnGetIndexColor(this, &SGraphNode_Dialogue::GetIndexColor);
 		
-	IconWidget = SNew(SOverlayIcon, OverlayMainIconSize)
+	IconWidget = SNew(SOverlayIcon, OverlayMainIconSize, HoverSize)
 		.Image(this, &SGraphNode_Dialogue::GetNodeIcon)
 		.Visibility(this, &SGraphNode_Dialogue::GetIconVisibility);
 
@@ -403,34 +432,40 @@ void SGraphNode_Dialogue::UpdateGraphNode()
 		.HAlign(HAlign_Center)
 		.VAlign(VAlign_Fill)
 		[
-			SNew(SBox)
-			.WidthOverride(200)
+			SNew(SBorder)
+			.BorderImage(FDialogueStyle::Get()->GetBrush("DialogueEditor.Graph.DialogueNode.DebugBorder"))
+			.BorderBackgroundColor(this, &SGraphNode_Dialogue::GetDebugBorderColor)
+			.Padding(this, &SGraphNode_Dialogue::GetDebugBorderPadding)
 			[
-				SAssignNew(MainVerticalBox, SVerticalBox)
-				+SVerticalBox::Slot()
-				.AutoHeight()
+				SNew(SBox)
+				.WidthOverride(200)
 				[
-					SNew(SOverlay)
-					.AddMetaData<FGraphNodeMetaData>(TagMeta)
-					+SOverlay::Slot()
-					.Padding(Settings->GetNonPinNodeBodyPadding())
+					SAssignNew(MainVerticalBox, SVerticalBox)
+					+SVerticalBox::Slot()
+					.AutoHeight()
 					[
-						SNew(SImage)
-						.Image(GetNodeBodyBrush())
-						.ColorAndOpacity(this, &SGraphNode_Dialogue::GetNodeBodyColor)
-					]
-					+SOverlay::Slot()
-					.Padding(Settings->GetNonPinNodeBodyPadding())
-					[
-						SNew(SImage)
-						.Image(FDialogueStyle::Get()->GetBrush("DialogueEditor.Graph.DialogueNode.Border"))
-						.ColorAndOpacity(this, &SGraphNode_Dialogue::GetBorderColor)
-					]
-					+SOverlay::Slot()
-					[
-						InnerVerticalBox.ToSharedRef()
-					]
-				]	
+						SNew(SOverlay)
+						.AddMetaData<FGraphNodeMetaData>(TagMeta)
+						+SOverlay::Slot()
+						.Padding(Settings->GetNonPinNodeBodyPadding())
+						[
+							SNew(SImage)
+							.Image(GetNodeBodyBrush())
+							.ColorAndOpacity(this, &SGraphNode_Dialogue::GetNodeBodyColor)
+						]
+						+SOverlay::Slot()
+						.Padding(Settings->GetNonPinNodeBodyPadding())
+						[
+							SNew(SImage)
+							.Image(FDialogueStyle::Get()->GetBrush("DialogueEditor.Graph.DialogueNode.Border"))
+							.ColorAndOpacity(this, &SGraphNode_Dialogue::GetBorderColor)
+						]
+						+SOverlay::Slot()
+						[
+							InnerVerticalBox.ToSharedRef()
+						]
+					]	
+				]
 			]
 		];
 
@@ -602,7 +637,7 @@ void SGraphNode_Dialogue::MoveTo(const FVector2D& NewPosition, FNodeSet& NodeFil
 		UEdGraph_Dialogue* DialogueGraph = DialogueNode->GetDialogueEdGraph();
 		if (DialogueGraph)
 		{
-			DialogueGraph->RebuildGraphAroundNode(DialogueNode);
+			DialogueGraph->UpdateChildrenOrder(DialogueNode);
 		}
 	}
 }
@@ -622,6 +657,39 @@ const FSlateBrush* SGraphNode_Dialogue::GetNodeBodyBrush() const
 		return FDialogueStyle::Get()->GetBrush("DialogueEditor.Graph.DialogueEntryDefault");
 	}
 	return FDialogueStyle::Get()->GetBrush("DialogueEditor.Graph.DialogueNode");
+}
+
+FSlateColor SGraphNode_Dialogue::GetDebugBorderColor() const
+{
+	FLinearColor Color = FLinearColor::Transparent;
+
+	if (UEdGraphNode_DialogueBase* Node = CastChecked<UEdGraphNode_DialogueBase>(GraphNode))
+	{		
+		if (Node->bDebuggerMark_Active)
+		{
+			Color = DialogueSettings->DebuggerState_Active;
+		}
+		else if (Node->bDebuggerMark_Finished)
+		{
+			Color = DialogueSettings->DebuggerState_Completed;
+		}
+	}	
+
+	return Color;
+}
+
+FMargin SGraphNode_Dialogue::GetDebugBorderPadding() const
+{
+	bool bDebugEnabled = false;
+	if (UEdGraphNode_DialogueBase* Node = CastChecked<UEdGraphNode_DialogueBase>(GraphNode))
+	{
+		bDebugEnabled = Node->bDebuggerMark_Active || 
+						Node->bDebuggerMark_Finished || 
+						Node->bDebuggerMark_EntryAllowed ||
+						Node->bDebuggerMark_EntryDenied;
+	}
+
+	return bDebugEnabled ? FMargin(4.0f, 4.0f, 4.0f, 4.0f) : FMargin(0.0f);
 }
 
 EVisibility SGraphNode_Dialogue::GetContentVisibility() const

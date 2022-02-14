@@ -28,12 +28,11 @@ void UEdGraphNode_DialogueBase::PostEditChangeProperty(FPropertyChangedEvent& Pr
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
-	UEdGraph_Dialogue* EdGraph = GetDialogueEdGraph();
-	check(EdGraph != nullptr);
-
-	EdGraph->RebuildGraphAroundNode(this);
-
 	UpdateCachedValues();
+
+	UEdGraph_Dialogue* DialogueEdGraph = GetDialogueEdGraph();
+	check(DialogueEdGraph != nullptr);
+	DialogueEdGraph->ScheduleRebuild();
 }
 #endif // WITH_EDITOR
 
@@ -67,6 +66,12 @@ FText UEdGraphNode_DialogueBase::GetTooltipText() const
 void UEdGraphNode_DialogueBase::PrepareForCopying()
 {
 	Super::PrepareForCopying();
+}
+
+
+void UEdGraphNode_DialogueBase::PostPasteNode()
+{
+	Super::PostPasteNode();	
 }
 
 void UEdGraphNode_DialogueBase::AutowireNewNode(UEdGraphPin* FromPin)
@@ -156,6 +161,7 @@ int32 UEdGraphNode_DialogueBase::GetExecutionIndex(UEdGraphNode_DialogueBase* In
 {	
 	return 0;
 }
+
 
 
 

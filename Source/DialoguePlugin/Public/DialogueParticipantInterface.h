@@ -9,7 +9,7 @@
 class UDialogue;
 
 // This class does not need to be modified.
-UINTERFACE(MinimalAPI)
+UINTERFACE(MinimalAPI, BlueprintType)
 class UDialogueParticipantInterface : public UInterface
 {
 	GENERATED_BODY()

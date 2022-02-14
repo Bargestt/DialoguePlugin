@@ -60,6 +60,16 @@ FDialogueNode UDialogue::GetNode(int32 NodeId) const
 	return Nodes.FindRef(NodeId);
 }
 
+FText UDialogue::GetNodeText(int32 NodeId) const
+{
+	return Nodes.FindRef(NodeId).Text;
+}
+
+UDialogueNodeContext* UDialogue::GetNodeContext(int32 NodeId) const
+{
+	return Nodes.FindRef(NodeId).Context;
+}
+
 bool UDialogue::IsNodeEmpty(int32 NodeId) const
 {
 	const FDialogueNode* NodePtr = Nodes.Find(NodeId);
@@ -83,6 +93,12 @@ FDialogueNode UDialogue::GetChildNode(int32 NodeId, int32 ChildIndex) const
 {
 	const FDialogueNode* NodePtr = Nodes.Find(NodeId);
 	return (NodePtr && NodePtr->Children.IsValidIndex(ChildIndex)) ? GetNode(NodePtr->Children[ChildIndex]) : FDialogueNode();
+}
+
+int32 UDialogue::GetChildId(int32 NodeId, int32 ChildIndex) const
+{
+	const FDialogueNode* NodePtr = Nodes.Find(NodeId);
+	return (NodePtr && NodePtr->Children.IsValidIndex(ChildIndex)) ? NodePtr->Children[ChildIndex] : INDEX_NONE;
 }
 
 TArray<FDialogueNode> UDialogue::GetChildrenNodes(int32 NodeId) const
@@ -129,6 +145,13 @@ FDialogueNode UDialogue::GetEntryNode(FName EntryName) const
 	return GetNode(GetEntryId(EntryName));
 }
 
+TArray<FName> UDialogue::GetEntries() const
+{
+	TArray<FName> Arr;
+	EntryPoints.GenerateKeyArray(Arr);
+	return Arr;
+}
+
 bool UDialogue::IsNodeContextUniform() const
 {
 	return bUniformContext;
@@ -139,37 +162,11 @@ TSubclassOf<UDialogueNodeContext> UDialogue::GetDefaultNodeContextClass() const
 	return NodeContextClass;
 }
 
-
-
-
-void UDialogue::CollectParticipantInfo(TArray<FName>& ParticipantNames, TArray<UObject*>& Participants, TMap<FName, UObject*>& NamedParticipants)
-{	
-	TSet<FName> NameSet;
-	TSet<UObject*> ParticipantsSet;
-	for (const auto& Pair : Nodes)
-	{
-		const FDialogueNode& Node = Pair.Value;
-
-		bool bHasName = Node.Participant.Name != NAME_None;
-		bool bHasParticipant = Node.Participant.Object != nullptr;
-		
-		if (bHasName)
-		{
-			NameSet.Add(Node.Participant.Name);
-		}
-		if (bHasParticipant)
-		{
-			ParticipantsSet.Add(Node.Participant.Object);
-		}
-		if (bHasName && bHasParticipant)
-		{
-			NamedParticipants.Add(Node.Participant.Name, Node.Participant.Object);
-		}
-	}
-
-	 ParticipantNames = NameSet.Array();
-	 Participants = ParticipantsSet.Array();
+TArray<FDialogueParticipant> UDialogue::GetAllParticipants() const
+{
+	return Participants;
 }
+
 
 /*--------------------------------------------
  	Editor
@@ -319,6 +316,13 @@ void FDialogueEditorStruct::SetNodes(const TMap<int32, FDialogueNode>& NewNodeMa
 		{
 			Dialogue->EntryPoints.Add(NAME_None, 0);
 		}
+		
+		TSet<FDialogueParticipant> Participants;
+		for (auto& NodePair : Dialogue->Nodes)
+		{
+			Participants.Add(NodePair.Value.Participant);
+		}
+		Dialogue->Participants = Participants.Array();
 
 		bIdCreationInitialized = false;
 	}

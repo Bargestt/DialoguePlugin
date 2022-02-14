@@ -12,39 +12,7 @@ class UDialogueNodeContext;
 class UDialogueEvent;
 class UDialogueAssetContext;
 
-/**
- * 
- */
-UCLASS(Blueprintable)
-class DIALOGUEPLUGIN_API ADlgTestActor : public AActor, public IDialogueParticipantInterface
-{
-	GENERATED_BODY()
 
-public:	
-	virtual FName GetParticipantKey_Implementation() const
-	{
-		return TEXT("DlgTestActor");
-	}
-};
-
-/**
- * 
- */
-UCLASS()
-class DIALOGUEPLUGIN_API UDlgTestAsset : public UPrimaryDataAsset, public IDialogueParticipantInterface
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere)
-	FName Name = TEXT("DlgTestAsset");
-
-public:	
-	
-	virtual FName GetParticipantKey_Implementation() const
-	{
-		return Name;
-	}
-};
 
 /**  */
 USTRUCT(BlueprintType)
@@ -62,7 +30,23 @@ struct DIALOGUEPLUGIN_API FDialogueParticipant
 		: Name(NAME_None)
 		, Object(nullptr)
 	{ }
+
+	FDialogueParticipant(FName InName, UObject* InObject = nullptr)
+		: Name(InName)
+		, Object(InObject)
+	{ }
+
+	FORCEINLINE bool operator==(const FDialogueParticipant& Other) const
+	{
+		return Name == Other.Name && Object == Other.Object;
+	}
+
+	FORCEINLINE friend uint32 GetTypeHash(const FDialogueParticipant& Participant)
+	{
+		return ::GetTypeHash(Participant.Name);
+	}
 };
+
 
 
 /**  */
@@ -143,7 +127,7 @@ public:
 /**
  * Basic dialogue data asset
  */
-UCLASS()
+UCLASS(Blueprintable, BlueprintType)
 class DIALOGUEPLUGIN_API UDialogue : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
@@ -164,6 +148,10 @@ private:
 	UPROPERTY()
 	TMap<int32, FDialogueNode> Nodes;
 
+	/** Collected unique participants from all nodes */
+	UPROPERTY(VisibleAnywhere, Category = Dialogue)
+	TArray<FDialogueParticipant> Participants;
+
 public:
 	/** Ensure all nodes use specified context */
 	UPROPERTY(EditAnywhere, Category = Dialogue)
@@ -181,6 +169,8 @@ public:
 
 	/** Ensure all node properties are correct */
 	virtual void FixNode(FDialogueNode& Node);
+
+	virtual void PostRebuild() { }
 #endif //WITH_EDITOR
 
 
@@ -198,6 +188,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
 	FDialogueNode GetNode(int32 NodeId) const;
 
+	UFUNCTION(BlueprintCallable, Category = Dialogue)
+	FText GetNodeText(int32 NodeId) const;
+
+	UFUNCTION(BlueprintCallable, Category = Dialogue)
+	UDialogueNodeContext* GetNodeContext(int32 NodeId) const;
+
 	/** Empty node has no Text, Participant, Sound, Context. Invalid nodes are always empty */
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
 	bool IsNodeEmpty(int32 NodeId) const;
@@ -212,6 +208,9 @@ public:
 	/** Returns default constructed node if not found */
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
 	FDialogueNode GetChildNode(int32 NodeId, int32 ChildIndex) const;
+
+	UFUNCTION(BlueprintCallable, Category = Dialogue)
+	int32 GetChildId(int32 NodeId, int32 ChildIndex) const;
 
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
 	TArray<FDialogueNode> GetChildrenNodes(int32 NodeId) const;
@@ -231,6 +230,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
 	FDialogueNode GetEntryNode(FName EntryName) const;
 
+	UFUNCTION(BlueprintCallable, Category = Dialogue)
+	TArray<FName> GetEntries() const;
+
 
 
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
@@ -239,15 +241,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
 	TSubclassOf<UDialogueNodeContext> GetDefaultNodeContextClass() const;
 
-	
-	/**  
-	 *	Iterate over all nodes and collect participants
-	 * @param	ParticipantNames	Array of all unique ParticipantNames
-	 * @param	Participants	Array of all Participant objects
-	 * @param	NamedParticipants	ParticipantNames to valid Participant objects
-	 */
+
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
-	void CollectParticipantInfo(TArray<FName>& ParticipantNames, TArray<UObject*>& Participants, TMap<FName, UObject*>& NamedParticipants);
+	TArray<FDialogueParticipant> GetAllParticipants() const;	
+
 };
 
 

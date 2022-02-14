@@ -13,25 +13,91 @@ struct FDialogueNode;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FDialogueNodeEvent, int32, NodeId);
 
 
-/**
- * Dialogue logic execution
+
+#if WITH_EDITOR
+
+	#define DIALOGUE_LOG_ADD(StepStruct) StepStruct.PushToLog(ExecutionLog, OnLogChanged);
+	#define DIALOGUE_LOG_CLEAR() ExecutionLog.Empty();
+
+#else
+
+	#define DIALOGUE_LOG_ADD(StepStruct)
+	#define DIALOGUE_LOG_CLEAR()
+
+#endif //WITH_EDITOR
+
+
+
+/**  
+ *  Container with all basic parameters to begin dialogue execution
+ *  Allows entry selection from dropdown menu
+ *  Exposes participant binds in dialogue
  */
-UCLASS(Abstract, Blueprintable)
-class DIALOGUEPLUGIN_API UDialogueExecutorBase : public UObject
+USTRUCT(BlueprintType)
+struct DIALOGUEPLUGIN_API FExecutorSetup
 {
 	GENERATED_BODY()
 
+#if WITH_EDITORONLY_DATA
+	UPROPERTY(EditDefaultsOnly)
+	bool bExpandStruct;
+#endif // WITH_EDITORONLY_DATA
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UDialogue* Dialogue;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FName Entry;	
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bOverrideDefault;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, EditFixedSize, meta = (LockNameSelection = true))
+	TArray<FDialogueParticipant> Participants;
+};
+
+
+
+/**
+ * Dialogue logic execution base class with debugger
+ * Grants ability to execute nodes and traverse the dialogue
+ */
+UCLASS(Abstract, BlueprintType)
+class DIALOGUEPLUGIN_API UDialogueExecutorBase : public UObject
+{
+	GENERATED_BODY()
+	
 	/** Flag for world context and that object was created properly */
 	uint8 bWasCreated : 1;
 
 	uint8 bWasInitialized : 1;
 
+	uint8 bTransitionInProgress : 1;
+
 public:
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnExecutorCreated, const UDialogueExecutorBase&);	
+	static FOnExecutorCreated OnExecutorCreated;
+
+
 	UPROPERTY(BlueprintAssignable, Category = Dialogue)
 	FDialogueNodeEvent OnNodeEnter;
 
 	UPROPERTY(BlueprintAssignable, Category = Dialogue)
 	FDialogueNodeEvent OnNodeLeave;
+
+
+
+	UPROPERTY(BlueprintAssignable, Category = Dialogue)
+	FDialogueNodeEvent OnNodeExecutionBegin;
+
+	UPROPERTY(BlueprintAssignable, Category = Dialogue)
+	FDialogueNodeEvent OnNodeExecutionEnd;
+
+	UPROPERTY(BlueprintAssignable, Category = Dialogue)
+	FDialogueNodeEvent OnDialogueExecutionStarted;
+
+	UPROPERTY(BlueprintAssignable, Category = Dialogue)
+	FDialogueNodeEvent OnDialogueExecutionFinished;
 
 
 	UPROPERTY()
@@ -52,8 +118,12 @@ public:
 	bool WasInitialized() const;
 
 	/** Main participant getter function. returns actual participant */
-	virtual UObject* GetParticipantFromNode(const FDialogueNode* Node, bool bEnsureInterface = false) const;
+	UFUNCTION(BlueprintCallable, Category = Dialogue)
+	virtual UObject* ResolveParticipant(const FDialogueParticipant& Participant) const;
 
+
+	UFUNCTION(BlueprintCallable, Category = Dialogue)
+	virtual void SetDialogue(UDialogue* NewDialogue);
 
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
 	UDialogue* GetDialogue() const;
@@ -72,6 +142,9 @@ public:
 	/** @param	bOverrideExisting	Replace participant even if it's set and valid in map */
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
 	void SetParticipant(FName Name, UObject* Participant, bool bOverrideExisting = true);
+
+	UFUNCTION(BlueprintCallable, Category = Dialogue)
+	void SetParticipantMap(const TMap<FName, UObject*>& NewParticipants, bool bOverrideExisting = true);
 
 	UFUNCTION(BlueprintCallable, Category = Dialogue, meta = (DeterminesOutputType = Class, DynamicOutputParam = OutParticipants))
 	void GetParticipantsOfClass(TSubclassOf<UObject> Class, TArray<UObject*>& OutParticipants);
@@ -122,12 +195,14 @@ public:
 	void FormatText(FText InText, int32 NodeId, FText& OutText);
 
 
-public:
-	// Events
 
+	// Events
+public:
 	/** Before initialization function */
 	virtual void HandleCreated();
 
+
+protected:
 	/** Main initialization function */
 	virtual void HandleInit();
 
@@ -136,15 +211,122 @@ public:
 	void ReceiveOnInit();
 	
 
-	virtual void HandleNodeLeave(int32 NodeId);
+	/** Called from MoveToNode */
+	virtual void HandleNodeLeave(int32 NodeId);	
+
+	/** Called from MoveToNode */
+	virtual void HandleNodeEnter(int32 NodeId);
 
 	UFUNCTION(BlueprintImplementableEvent, meta = (DisplayName = "OnNodeLeave"))
 	void ReceiveOnNodeLeave(int32 NodeId);
 
-	virtual void HandleNodeEnter(int32 NodeId);
-
 	UFUNCTION(BlueprintImplementableEvent, meta = (DisplayName = "OnNodeEnter"))
 	void ReceiveOnNodeEnter(int32 NodeId);
+
+
+	
+	virtual void HandleNodeExecutionBegin(int32 NodeId);
+
+	
+	virtual void HandleNodeExecutionEnd(int32 NodeId);
+
+
+	// Debugger log
+public:
+
+#if WITH_EDITOR
+	struct FDialogueExecutionStep
+	{
+		int32 NodeId;
+
+		enum EExecutionAction
+		{
+			None,
+			Active,
+			Finished,
+
+			EntryUnknown,
+			EntryAllowed,
+			EntryDenied
+		};
+		EExecutionAction Action;
+
+		FDialogueExecutionStep() : FDialogueExecutionStep(-1, EExecutionAction::None)
+		{ }
+
+		FDialogueExecutionStep(int32 NodeId, EExecutionAction Action)
+			: NodeId(NodeId)
+			, Action(Action)
+		{ }
+
+		FORCEINLINE bool operator==(const FDialogueExecutionStep& Other) const
+		{
+			return this->Action == Other.Action && this->NodeId == Other.NodeId;
+		}
+
+		FORCEINLINE bool operator!=(const FDialogueExecutionStep& Other) const
+		{
+			return this->Action != Other.Action || this->NodeId != Other.NodeId;
+		}
+
+
+		void PushToLog(TArray<FDialogueExecutionStep>& Log, FSimpleMulticastDelegate& NotifyEvent)
+		{
+			bool bChanged = false;
+			switch (Action)
+			{
+			
+			case Active:
+			case Finished:
+				if (Log.Num() == 0 || Log.Last() != *this)
+				{
+					Log.Add(*this);
+					bChanged = true;
+				}
+				break;
+			
+			case EntryUnknown:
+			case EntryAllowed:
+			case EntryDenied:
+			{
+				bool bShouldAdd = true;
+				for (int32 Index = Log.Num() - 1; Index >= 0 ; Index--)
+				{
+					FDialogueExecutionStep& Entry = Log[Index];
+					if (Entry.Action < EExecutionAction::EntryUnknown )
+					{
+						break;
+					}
+					if (Entry.NodeId == NodeId)
+					{
+						Entry.Action = this->Action;
+						bChanged = true;
+					}
+				}
+				if (bShouldAdd)
+				{
+					Log.Add(*this);
+					bChanged = true;
+				}
+				break;
+			}
+
+			case None:
+			default:
+				break;
+			}
+
+			if (bChanged)
+			{
+				NotifyEvent.Broadcast();
+			}
+		}
+	};
+
+	FSimpleMulticastDelegate OnLogChanged;
+	TArray<FDialogueExecutionStep> ExecutionLog;
+
+#endif
 };
 
 
@@ -175,30 +357,19 @@ class DIALOGUEPLUGIN_API UDialogueExecutor : public UDialogueExecutorBase
 	GENERATED_BODY()
 	
 private:
-	uint8 bExecutionInProgress : 1;
-	uint8 bExecutionCleanupInProgress : 1;
+	uint8 bNodeExecutionInProgress : 1;
+	uint8 bNodeExecutionCleanupInProgress : 1;
 
 protected:
 	UPROPERTY()
 	int32 CurrentNodeId;
 
-public:
-	UPROPERTY(BlueprintAssignable, Category = Dialogue)
-	FDialogueNodeEvent OnNodeExecutionBegin;
-
-	UPROPERTY(BlueprintAssignable, Category = Dialogue)
-	FDialogueNodeEvent OnNodeExecutionEnd;
-
-	UPROPERTY(BlueprintAssignable, Category = Dialogue)
-	FDialogueNodeEvent OnDialogueExecutionStarted;
-
-	UPROPERTY(BlueprintAssignable, Category = Dialogue)
-	FDialogueNodeEvent OnDialogueExecutionFinished;
 
 
 public:
 	UDialogueExecutor();
 
+	virtual void SetDialogue(UDialogue* NewDialogue) override;
 
 	/** 
 	 * Start execution at entry point node
@@ -232,6 +403,11 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
 	void FinishNodeExecution(int32 NextNodeId);
+
+	/** Finish executing current node and stop */
+	UFUNCTION(BlueprintCallable, Category = Dialogue)
+	void StopExecution();
+
 
 	/** Is current node is set */
 	UFUNCTION(BlueprintCallable, Category = Dialogue)
