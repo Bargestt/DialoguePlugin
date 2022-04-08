@@ -1,4 +1,5 @@
 
+
 #include "EdGraphNode_DialogueEntry.h"
 #include "DialogueEditorSettings.h"
 #include "EdGraph_Dialogue.h"
