@@ -16,9 +16,13 @@
 #include "DialogueEditorSettings.h"
 #include "Customizations/DialogueNodeCustomization.h"
 #include "Editor/EdGraphNode_DialogueNode.h"
-#include "Customizations/DialogueParticipantCustomization.h"
 #include "DialogueParticipantRegistry.h"
+
+#include "Customizations/DialogueParticipantCustomization.h"
 #include "Customizations/ExecutorSetupCustomization.h"
+#include "Customizations/DialogueConditionCustomization.h"
+#include "DialogueConditionInterface.h"
+
 
 
 
@@ -85,6 +89,8 @@ public:
 		{
 			FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked< FPropertyEditorModule >("PropertyEditor");
 			REG_CUSTOMIZATION(PropertyModule, FDialogueParticipant, FDialogueParticipantCustomization);
+			REG_CUSTOMIZATION(PropertyModule, FDialogueCondition, FDialogueConditionCustomization);
+			REG_CUSTOMIZATION(PropertyModule, FDialogueConditionArray, FDialogueConditionArrayCustomization);
 			REG_CUSTOMIZATION(PropertyModule, FExecutorSetup, FExecutorSetupCustomization);
 			REG_CLASS_CUSTOMIZATION(PropertyModule, UEdGraphNode_DialogueNode, FDialogueNodeCustomization);
 		}

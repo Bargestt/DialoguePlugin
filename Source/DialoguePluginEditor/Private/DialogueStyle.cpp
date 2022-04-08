@@ -40,6 +40,7 @@ void FDialogueStyle::Initialize()
 	const FVector2D Icon16x16(16.0f, 16.0f);
 	const FVector2D Icon20x20(20.0f, 20.0f);
 	const FVector2D Icon40x40(40.0f, 40.0f);
+	const FVector2D Icon64x64(64.0f, 64.0f);
 
 	// Only register once
 	if (StyleSet.IsValid())
@@ -56,6 +57,9 @@ void FDialogueStyle::Initialize()
 	
 	StyleSet->Set("DialogueEditor.Graph.DialogueNode.Index.Default", FSlateColor(FLinearColor(0.3f, 0.3f, 0.3f)));
 	StyleSet->Set("DialogueEditor.Graph.DialogueNode.Index.Selected", FSlateColor(FLinearColor(0.0f, 0.25f, 0.5f)));
+
+	StyleSet->Set("ClassIcon.Dialogue", new IMAGE_PLUGIN_BRUSH("Icons/ClassIcon", Icon16x16));
+	StyleSet->Set("ClassThumbnail.Dialogue", new IMAGE_PLUGIN_BRUSH("Icons/AssetIcon", Icon64x64));
 
 	StyleSet->Set("DialogueEditor.Graph.DialogueNode.Condition", new IMAGE_PLUGIN_BRUSH("Icons/DialogueNode_Condition", Icon16x16));
 	StyleSet->Set("DialogueEditor.Graph.DialogueNode.Event", new IMAGE_PLUGIN_BRUSH("Icons/DialogueNode_Event", Icon16x16));
