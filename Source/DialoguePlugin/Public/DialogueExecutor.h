@@ -54,8 +54,43 @@ struct DIALOGUEPLUGIN_API FExecutorSetup
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, EditFixedSize, meta = (LockNameSelection = true))
 	TArray<FDialogueParticipant> Participants;
+
+	FExecutorSetup()
+		: Dialogue(nullptr)
+		, Entry(NAME_None)
+		, bOverrideDefault(false)
+	{ 
+#if WITH_EDITORONLY_DATA	
+		bExpandStruct = false;
+#endif // WITH_EDITORONLY_DATA
+	}
 };
 
+
+
+
+DECLARE_DYNAMIC_DELEGATE_OneParam(FDialogueReplySignature, int32, ReplyIndex);
+
+UINTERFACE(MinimalAPI)
+class UDialogueWaitReplyInterface : public UInterface
+{
+	GENERATED_BODY()
+};
+
+/**
+ * Exposes delegate binding
+ */
+class DIALOGUEPLUGIN_API IDialogueWaitReplyInterface
+{
+	GENERATED_BODY()
+public:
+	
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Dialogue|Reply")
+	bool BindReplyEvent(const FDialogueReplySignature& Reply);
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Dialogue|Reply")
+	bool UnbindReplyEvent(const FDialogueReplySignature& Reply);
+};
 
 
 /**

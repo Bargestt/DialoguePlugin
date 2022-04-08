@@ -16,13 +16,9 @@
 #include "DialogueEditorSettings.h"
 #include "Customizations/DialogueNodeCustomization.h"
 #include "Editor/EdGraphNode_DialogueNode.h"
-#include "DialogueParticipantRegistry.h"
-
 #include "Customizations/DialogueParticipantCustomization.h"
+#include "DialogueParticipantRegistry.h"
 #include "Customizations/ExecutorSetupCustomization.h"
-#include "Customizations/DialogueConditionCustomization.h"
-#include "DialogueConditionInterface.h"
-
 
 
 
@@ -72,15 +68,43 @@ public:
 		// Register commands
 		FDialogueEditorCommands::Register();
 
-		//GraphPanelNodeFactory_Dialogue = MakeShareable(new FGraphPanelNodeFactory_Dialogue());
-		//FEdGraphUtilities::RegisterVisualNodeFactory(GraphPanelNodeFactory_Dialogue);
 
 		IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
 
-
-		if (!UDialogueEditorSettings::Get()->AssetCategory.IsEmpty())
+		
+		FText CategoryNameText = UDialogueEditorSettings::Get()->AssetCategory;
+		if (!CategoryNameText.IsEmpty())
 		{
-			AssetCategory = AssetTools.RegisterAdvancedAssetCategory(FName(TEXT("DialogueCategory")), UDialogueEditorSettings::Get()->AssetCategory);
+			FName CategoryName = FName(CategoryNameText.ToString());
+
+			if (CategoryName == FName("Basic"))
+			{
+				AssetCategory = EAssetTypeCategories::Basic;
+			}
+			else if (CategoryName == FName("UI"))
+			{
+				AssetCategory = EAssetTypeCategories::UI;
+			}
+			else if (CategoryName == FName("Misc"))
+			{
+				AssetCategory = EAssetTypeCategories::Misc;
+			}
+			else if (CategoryName == FName("Gameplay"))
+			{
+				AssetCategory = EAssetTypeCategories::Gameplay;
+			}
+			else if (CategoryName == FName("Blueprint"))
+			{
+				AssetCategory = EAssetTypeCategories::Blueprint;
+			}
+			else
+			{
+				AssetCategory = AssetTools.FindAdvancedAssetCategory(CategoryName);
+				if (AssetCategory == EAssetTypeCategories::Misc && CategoryName != FName("Misc"))
+				{
+					AssetCategory = AssetTools.RegisterAdvancedAssetCategory(CategoryName, CategoryNameText);
+				}	
+			}
 		}		
 
 		AssetTools.RegisterAssetTypeActions(RegisteredAssetActions.Add_GetRef(MakeShareable(new FAssetTypeActions_Dialogue(AssetCategory))));
@@ -89,8 +113,6 @@ public:
 		{
 			FPropertyEditorModule& PropertyModule = FModuleManager::LoadModuleChecked< FPropertyEditorModule >("PropertyEditor");
 			REG_CUSTOMIZATION(PropertyModule, FDialogueParticipant, FDialogueParticipantCustomization);
-			REG_CUSTOMIZATION(PropertyModule, FDialogueCondition, FDialogueConditionCustomization);
-			REG_CUSTOMIZATION(PropertyModule, FDialogueConditionArray, FDialogueConditionArrayCustomization);
 			REG_CUSTOMIZATION(PropertyModule, FExecutorSetup, FExecutorSetupCustomization);
 			REG_CLASS_CUSTOMIZATION(PropertyModule, UEdGraphNode_DialogueNode, FDialogueNodeCustomization);
 		}

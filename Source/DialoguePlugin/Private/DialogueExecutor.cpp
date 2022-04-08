@@ -3,7 +3,7 @@
 
 #include "DialogueExecutor.h"
 #include "DialoguePlugin.h"
-#include "DialogueConditionInterface.h"
+#include "DialogueCondition.h"
 #include "Dialogue.h"
 #include "DialogueContext.h"
 #include "DialogueParticipantInterface.h"
@@ -128,7 +128,7 @@ bool UDialogueExecutorBase::CheckNodeCondition(int32 NodeId)
 	{
 		const FDialogueNode* Node = Dialogue->GetNodeMap().Find(NodeId);
 
-		bool bCanEnter = !Node->Condition.IsValid() || Node->Condition.CheckCondition(this, Dialogue, NodeId);
+		bool bCanEnter = Node->Condition == nullptr || Node->Condition->CheckCondition(this);
 		DIALOGUE_LOG_ADD(FDialogueExecutionStep(NodeId, bCanEnter ? FDialogueExecutionStep::EntryAllowed : FDialogueExecutionStep::EntryDenied));
 
 		return bCanEnter;
@@ -153,7 +153,7 @@ TArray<int32> UDialogueExecutorBase::FindAvailableNextNodes(int32 NodeId, bool b
 			bool bCanEnterChild = 
 				Child &&
 				(Child->Context == nullptr || Child->Context->CanEnterNode(this, NodeId)) &&
-				(!Child->Condition.IsValid() || Child->Condition.CheckCondition(this, Dialogue, ChildId));
+				(Child->Condition == nullptr || Child->Condition->CheckCondition(this));
 
 
 			DIALOGUE_LOG_ADD(FDialogueExecutionStep(ChildId, bCanEnterChild ? FDialogueExecutionStep::EntryAllowed : FDialogueExecutionStep::EntryDenied));

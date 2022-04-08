@@ -807,7 +807,7 @@ EVisibility SGraphNode_Dialogue::GetIconVisibility() const
 EVisibility SGraphNode_Dialogue::GetConditionVisibility() const
 {
 	UEdGraphNode_DialogueNode* Node = Cast<UEdGraphNode_DialogueNode>(GraphNode);
-	return (Node && Node->Node.Condition.IsValid()) ? EVisibility::Visible : EVisibility::Hidden;
+	return (Node && Node->Node.Condition != nullptr) ? EVisibility::Visible : EVisibility::Hidden;
 }
 
 EVisibility SGraphNode_Dialogue::GetEventVisibility() const

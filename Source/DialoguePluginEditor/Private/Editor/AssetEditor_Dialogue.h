@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Toolkits/AssetEditorToolkit.h"
-#include "Toolkits/AssetEditorManager.h"
 #include "Editor/EditorWidgets/Public/ITransportControl.h"
 #include "EditorUndoClient.h"
 #include "Framework/Commands/UICommandList.h"
@@ -71,10 +70,6 @@ private:
 	FText GetDebuggerDesc() const;
 	TSharedRef<class SWidget> OnGetDebuggerActorsMenu();
 	void OnDebuggerActorSelected(TWeakObjectPtr<class UDialogueExecutorBase> InstanceToDebug);
-
-	FText GetDebuggerVerbosityDesc() const;
-	TSharedRef<class SWidget> OnGetDebuggerVerbosityMenu();
-	void OnDebuggerVerbositySelected(FName Verbosity);
 
 	// Commands
 	void SelectAllNodes();

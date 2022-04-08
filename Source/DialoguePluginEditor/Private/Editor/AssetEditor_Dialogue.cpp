@@ -342,13 +342,7 @@ void FAssetEditor_Dialogue::InitDialogueEditor(const EToolkitMode::Type Mode, co
 		->AddArea
 		(
 			FTabManager::NewPrimaryArea()
-			->SetOrientation(Orient_Vertical)
-			->Split
-			(
-				FTabManager::NewStack()
-				->SetHideTabWell(true)
-				->AddTab(GetToolbarTabId(), ETabState::OpenedTab)
-			)
+			->SetOrientation(Orient_Vertical)			
 			->Split
 			(
 				FTabManager::NewSplitter()
@@ -547,7 +541,7 @@ void FAssetEditor_Dialogue::ExtendToolbar()
 				const bool bCanShowDebugger = EditorPtr->IsDebuggerReady();
 				if (bCanShowDebugger)
 				{
-					TSharedRef<SWidget> TargetSelectionBox = SNew(SComboButton)
+					TSharedRef<SWidget> SelectionBox = SNew(SComboButton)
 					.OnGetMenuContent(EditorPtr.Get(), &FAssetEditor_Dialogue::OnGetDebuggerActorsMenu )
 					.ButtonContent()
 					[
@@ -556,41 +550,15 @@ void FAssetEditor_Dialogue::ExtendToolbar()
 						.Text(EditorPtr.Get(), &FAssetEditor_Dialogue::GetDebuggerDesc )
 					];
 
-					TSharedRef<SWidget> VerbositySelectionBox = 
-					SNew(SBox)
-					.MinDesiredWidth(100.0f)
-					[
-						SNew(SVerticalBox)
-						+ SVerticalBox::Slot().HAlign(HAlign_Center).Padding(0.0f, 0.0f, 0.0f, 2.0f)
-						[
-							SNew(STextBlock)
-							.Text(LOCTEXT("SelectDebugVerbosityHint", "Verbosity"))
-						]
-						+ SVerticalBox::Slot().AutoHeight()
-						[
-							SNew(SComboButton)
-							.OnGetMenuContent(EditorPtr.Get(), &FAssetEditor_Dialogue::OnGetDebuggerVerbosityMenu )
-							.ButtonContent()
-							[
-								SNew(STextBlock)
-								.ToolTipText( LOCTEXT("SelectDebugVerbosity", "Pick debug verbosity") )
-								.Text(EditorPtr.Get(), &FAssetEditor_Dialogue::GetDebuggerVerbosityDesc )
-							]
-						]
-					];
-
-					ToolbarBuilder.AddWidget(VerbositySelectionBox);
-
-					ToolbarBuilder.AddSeparator();
 					
 					ToolbarBuilder.AddToolBarButton(FDialogueDebuggerCommands::Get().StepToBegin);
-					ToolbarBuilder.AddToolBarButton(FDialogueDebuggerCommands::Get().StepBack);	
+					ToolbarBuilder.AddToolBarButton(FDialogueDebuggerCommands::Get().StepBack);
 					ToolbarBuilder.AddToolBarButton(FDialogueDebuggerCommands::Get().StepForward);
 					ToolbarBuilder.AddToolBarButton(FDialogueDebuggerCommands::Get().StepToEnd);
 
-					ToolbarBuilder.AddSeparator();				
+					ToolbarBuilder.AddSeparator();
 
-					ToolbarBuilder.AddWidget(TargetSelectionBox);
+					ToolbarBuilder.AddWidget(SelectionBox);
 
 				}
 			}
@@ -745,44 +713,6 @@ void FAssetEditor_Dialogue::OnDebuggerActorSelected(TWeakObjectPtr<UDialogueExec
 	if (Debugger.IsValid())
 	{
 		Debugger->OnInstanceSelectedInDropdown(InstanceToDebug.Get());
-	}
-}
-
-FText FAssetEditor_Dialogue::GetDebuggerVerbosityDesc() const
-{
-	if (Debugger.IsValid())
-	{
-		return FText::FromString(Debugger->GetCurrentVerbosity()->Name.ToString());
-	}
-	return FText::GetEmpty();
-}
-
-TSharedRef<class SWidget> FAssetEditor_Dialogue::OnGetDebuggerVerbosityMenu()
-{
-	FMenuBuilder MenuBuilder(true, NULL);
-
-	if (Debugger.IsValid())
-	{
-		const TArray<TSharedRef<FDialogueDebuggerStepVerbosity>>& Levels = Debugger->GetVerbosityLevels();
-		for (const auto& Level : Levels)
-		{
-			const FText Desc = FText::FromName(Level->Name);
-			const FText ToolTip = FText::FromString(Level->Description);
-
-			FUIAction ItemAction(FExecuteAction::CreateSP(this, &FAssetEditor_Dialogue::OnDebuggerVerbositySelected, Level->Name));
-			MenuBuilder.AddMenuEntry(Desc, ToolTip, FSlateIcon(), ItemAction);
-		}
-	}
-
-	return MenuBuilder.MakeWidget();
-}
-
-
-void FAssetEditor_Dialogue::OnDebuggerVerbositySelected(FName Verbosity)
-{
-	if (Debugger.IsValid())
-	{
-		Debugger->OnVerbosityLevelSelectedInDropdown(Verbosity);
 	}
 }
 

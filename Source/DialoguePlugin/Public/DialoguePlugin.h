@@ -29,4 +29,5 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Dialogue", meta = (DynamicOutputParam = OutExecutor, DeterminesOutputType = Class))
 	static void CreateDialogueExecutor(TSubclassOf<UDialogueExecutorBase> Class, UObject* Owner, UDialogue* Dialogue, bool bDeferInitialization, UDialogueExecutorBase*& OutExecutor);
 		
+
 };

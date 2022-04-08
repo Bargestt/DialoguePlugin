@@ -1,81 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "DialogueExecutor.h"
 
 class UDialogue;
 class FAssetEditor_Dialogue;
 class UDialogueExecutorBase;
-
-
-struct FDialogueDebuggerStepVerbosity 
-{	
-	typedef UDialogueExecutorBase::FDialogueExecutionStep FDebuggerStep;
-	typedef UDialogueExecutorBase::FDialogueExecutionStep::EExecutionAction EExecutionAction;
-
-	FName Name;
-	FString Description;
-
-	virtual ~FDialogueDebuggerStepVerbosity()
-	{ }
-	
-	virtual bool CheckStepImportant(const TArray<FDebuggerStep>& Steps, int32 Step, int32& OutWriteStep, int32& OutAdvanceBy) const
-	{
-		return false;
-	}
-};
-
-struct FDDSV_Full : public FDialogueDebuggerStepVerbosity
-{
-	FDDSV_Full()
-	{
-		Name = FName("Full");
-		Description = TEXT("Maximally detailed verbosity");
-	}
-
-	virtual bool CheckStepImportant(const TArray<FDebuggerStep>& Steps, int32 Step, int32& OutWriteStep, int32& OutAdvanceBy) const override
-	{
-		OutWriteStep = Step;
-		OutAdvanceBy = 1;
-		return true;
-	}
-};
-
-
-struct FDDSV_Activation : public FDialogueDebuggerStepVerbosity
-{
-	FDDSV_Activation()
-	{
-		Name = FName("Activation");
-		Description = TEXT("Jump between steps where node was activated");
-	}
-
-	virtual bool CheckStepImportant(const TArray<FDebuggerStep>& Steps, int32 Step, int32& OutWriteStep, int32& OutAdvanceBy) const override
-	{		
-		if (Steps[Step].Action == EExecutionAction::Active)
-		{
-			// Walk ahead until node finished or another is activated
-			int32 StopAt = Step + 1;
-			while (StopAt < Steps.Num())
-			{
-				if (Steps[StopAt].Action == EExecutionAction::Active || Steps[StopAt].Action == EExecutionAction::Finished)
-				{
-					// Stop before activation or finish
-					StopAt--;
-					break;
-				}
-				StopAt++;
-			}
-
-			OutWriteStep = StopAt;
-			OutAdvanceBy = FMath::Max(1, StopAt - Step);
-			return true;
-		}
-
-		return false;
-	}
-};
-
 
 
 
@@ -98,10 +27,15 @@ private:
 
 	/** -1 is last step */
 	int32 ExecutionStep;
-	TArray<int32> StepIndices;	
+	TArray<int32> StepIndices;
 
-	TArray<TSharedRef<FDialogueDebuggerStepVerbosity>> VerbosityLevels;
-	TSharedPtr<FDialogueDebuggerStepVerbosity> CurrentVerbosity;
+	enum StepVerbosity
+	{
+		Activation,
+		Finish,
+		Full
+	};
+	StepVerbosity Verbosity;
 
 
 	// Execution state
@@ -133,12 +67,6 @@ public:
 	void GetMatchingInstances(TArray<UDialogueExecutorBase*>& MatchingInstances);
 	void OnInstanceSelectedInDropdown(UDialogueExecutorBase* SelectedInstance);
 
-	void OnVerbosityLevelSelectedInDropdown(FName Name);
-
-	TArray<TSharedRef<FDialogueDebuggerStepVerbosity>> GetVerbosityLevels() const;
-	TSharedRef<FDialogueDebuggerStepVerbosity> GetCurrentVerbosity() const;
-
-
 
 	void ClearDebuggerState();
 	void InitDebuggerState();
@@ -152,7 +80,6 @@ public:
 
 public:
 	// Commands
-
 	void StepBack();
 	bool CanStepBack();
 

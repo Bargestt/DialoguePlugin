@@ -5,9 +5,9 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "DialogueParticipantInterface.h"
-#include "DialogueConditionInterface.h"
 #include "Dialogue.generated.h"
 
+class UDialogueCondition;
 class UDialogueNodeContext;
 class UDialogueEvent;
 class UDialogueAssetContext;
@@ -82,8 +82,8 @@ struct DIALOGUEPLUGIN_API FDialogueNode
 	UDialogueNodeContext* Context;
 
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FDialogueCondition Condition;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Instanced)
+	UDialogueCondition* Condition;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Instanced)
 	TArray<UDialogueEvent*> Events;
@@ -95,6 +95,7 @@ public:
 		, Sound(nullptr)
 		, DialogueWave(nullptr)
 		, Context(nullptr)
+		, Condition(nullptr)
 	{ }
 
 	bool HasEvents() const

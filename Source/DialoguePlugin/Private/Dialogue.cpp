@@ -173,12 +173,16 @@ TArray<FDialogueParticipant> UDialogue::GetAllParticipants() const
  *--------------------------------------------*/
 
 FDialogueEditorStruct::FDialogueEditorStruct()
+	: Dialogue(nullptr)
+	, LastID(0)
+	, bIdCreationInitialized(false)
 {
-
+	
 }
 
 
 FDialogueEditorStruct::FDialogueEditorStruct(UDialogue* InDialogue, bool bInitializeIdCreation /*= true*/)
+	: FDialogueEditorStruct()
 {
 	Dialogue = InDialogue;
 	if (bInitializeIdCreation)

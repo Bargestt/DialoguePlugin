@@ -18,11 +18,6 @@ FDialogueDebugger::FDialogueDebugger()
 	FEditorDelegates::EndPIE.AddRaw(this, &FDialogueDebugger::OnEndPIE);
 
 	ExecutionStep = -1;
-
-	VerbosityLevels.Add(MakeShared<FDDSV_Activation>());
-	VerbosityLevels.Add(MakeShared<FDDSV_Full>());
-
-	CurrentVerbosity = VerbosityLevels[0];
 }
 
 FDialogueDebugger::~FDialogueDebugger()
@@ -198,32 +193,6 @@ void FDialogueDebugger::OnInstanceSelectedInDropdown(UDialogueExecutorBase* Sele
 	}
 }
 
-void FDialogueDebugger::OnVerbosityLevelSelectedInDropdown(FName Name)
-{
-	for (const auto& Verbosity : VerbosityLevels)
-	{
-		if (Verbosity->Name == Name)
-		{
-			if (CurrentVerbosity != Verbosity)
-			{
-				CurrentVerbosity = Verbosity;
-				Refresh();				
-			}
-			break;
-		}
-	}
-}
-
-TArray<TSharedRef<FDialogueDebuggerStepVerbosity>> FDialogueDebugger::GetVerbosityLevels() const
-{
-	return VerbosityLevels;
-}
-
-TSharedRef<FDialogueDebuggerStepVerbosity> FDialogueDebugger::GetCurrentVerbosity() const
-{
-	return CurrentVerbosity.ToSharedRef();
-}
-
 void FDialogueDebugger::ClearDebuggerState()
 {
 	ActiveNodes.Empty();
@@ -265,17 +234,37 @@ void FDialogueDebugger::Refresh()
 	const TArray<FDebuggerStep>& Log = ExecutorInstance->ExecutionLog;
 
 	StepIndices.Empty();
-	for (int32 Index = 0; Index < Log.Num(); )
+	for (int32 Index = 0; Index < Log.Num(); Index++)
 	{
-		int32 Advance = 1;
-		int32 WriteStep = Index;
-		if (CurrentVerbosity->CheckStepImportant(Log, Index, WriteStep, Advance))
-		{			
-			StepIndices.Add(FMath::Clamp(WriteStep, 0, FMath::Max(0, Log.Num() - 1)));
-		}
+		const FDebuggerStep& Step = Log[Index];
+		if (Step.Action == EExecutionAction::Active)
+		{
+			TArray<int32> SubSteps;
 
-		check(Advance != 0);
-		Index += Advance;
+			int32 SubStep = Index;
+			while (SubStep + 1 < Log.Num())
+			{
+				SubStep++;
+				if (Log[SubStep].Action == EExecutionAction::Active)
+				{
+					SubStep--;
+					if (Log[SubStep].Action == EExecutionAction::Finished && Log[SubStep].NodeId == Step.NodeId)
+					{
+						SubStep--;
+					}
+					break;
+				}
+
+				if (Log[SubStep].Action == EExecutionAction::Finished && Log[SubStep].NodeId != Step.NodeId)
+				{
+					SubSteps.Add(SubStep);
+				}
+			}
+
+			StepIndices.Add(SubStep);
+
+			StepIndices.Append(SubSteps);
+		}
 	}
 
 	ExecutionStep = -1;
