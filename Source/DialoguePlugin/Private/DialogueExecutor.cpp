@@ -128,7 +128,7 @@ bool UDialogueExecutorBase::CheckNodeCondition(int32 NodeId)
 	{
 		const FDialogueNode* Node = Dialogue->GetNodeMap().Find(NodeId);
 
-		bool bCanEnter = Node->Condition == nullptr || Node->Condition->CheckCondition(this);
+		bool bCanEnter = Node->CheckCondition(this);
 		DIALOGUE_LOG_ADD(FDialogueExecutionStep(NodeId, bCanEnter ? FDialogueExecutionStep::EntryAllowed : FDialogueExecutionStep::EntryDenied));
 
 		return bCanEnter;
@@ -153,7 +153,7 @@ TArray<int32> UDialogueExecutorBase::FindAvailableNextNodes(int32 NodeId, bool b
 			bool bCanEnterChild = 
 				Child &&
 				(Child->Context == nullptr || Child->Context->CanEnterNode(this, NodeId)) &&
-				(Child->Condition == nullptr || Child->Condition->CheckCondition(this));
+				Child->CheckCondition(this);
 
 
 			DIALOGUE_LOG_ADD(FDialogueExecutionStep(ChildId, bCanEnterChild ? FDialogueExecutionStep::EntryAllowed : FDialogueExecutionStep::EntryDenied));
